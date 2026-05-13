@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scanner Command Bot</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="設定カテゴリ">
+        <div class="brand">
+          <div class="scanner-mark" aria-hidden="true">
+            <span></span>
+          </div>
+          <div>
+            <p class="eyebrow">Scanner Command Bot</p>
+            <h1>Data Format案内</h1>
+          </div>
+        </div>
+
+        <section class="panel">
+          <div class="quick-actions" id="quickActions"></div>
+        </section>
+
+        <section class="panel compact">
+          <h2>Data Formatカテゴリ</h2>
+          <ul class="category-list" id="categoryList"></ul>
+        </section>
+      </aside>
+
+      <section class="chat-area" aria-label="チャット">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">Web App</p>
+            <h2>データフォーマット設定を質問してください</h2>
+          </div>
+          <button class="icon-button" id="clearButton" type="button" aria-label="会話をクリア" title="会話をクリア">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="M19 6l-1 14H6L5 6" />
+              <path d="M10 11v5" />
+              <path d="M14 11v5" />
+            </svg>
+          </button>
+        </header>
+
+        <div class="messages" id="messages" role="log" aria-live="polite"></div>
+
+        <form class="composer" id="chatForm">
+          <label class="sr-only" for="messageInput">質問</label>
+          <input
+            id="messageInput"
+            autocomplete="off"
+            placeholder="質問を入力"
+          />
+          <button class="send-button" type="submit" aria-label="送信" title="送信">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22 2L11 13" />
+              <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+            </svg>
+          </button>
+        </form>
+      </section>
+    </main>
+
+    <template id="messageTemplate">
+      <article class="message">
+        <div class="avatar"></div>
+        <div class="bubble"></div>
+      </article>
+    </template>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bwip-js/4.7.0/bwip-js-min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
