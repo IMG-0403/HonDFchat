@@ -425,7 +425,8 @@ h2 {
 }
 
 .aztec-canvas {
-  width: min(260px, 100%);
+  width: auto;
+  max-width: 100%;
   height: auto;
   image-rendering: pixelated;
   border: 10px solid #fff;

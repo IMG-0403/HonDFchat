@@ -10,11 +10,11 @@ const commandCatalog = [
   },
   {
     id: "df-show",
-    label: "データフォーマット表示",
+    label: "データフォーマット設定内容出力バーコード",
     category: "基本操作",
     summary: "現在登録されているデータフォーマット設定を表示します。",
-    keywords: ["show", "表示", "確認", "現在", "設定確認", "一覧", "見る", "読み出し"],
-    command: "DFMBK3?.",
+    keywords: ["show", "表示", "確認", "現在", "設定確認", "設定内容", "内容出力", "設定内容出力", "一覧", "見る", "読み出し"],
+    command: "DFMBK3?",
     notes: ["PDF 103Pの Show Data Format / Data Format Settings に対応します。", "設定変更前の確認用として使います。"],
   },
   {
@@ -145,7 +145,7 @@ const commandCatalog = [
   },
   {
     id: "df-clear-all",
-    label: "データフォーマット全削除",
+    label: "データフォーマット全削除バーコード",
     category: "削除",
     summary: "登録済みのデータフォーマットをすべて削除します。",
     keywords: ["clear all", "全削除", "全部", "すべて", "削除", "消す", "クリア"],
@@ -872,6 +872,7 @@ function escapeHtml(value) {
 
 function normalizeSettingCommand(command) {
   const trimmed = command.trim();
+  if (trimmed.endsWith("?")) return trimmed;
   return trimmed.endsWith(".") ? trimmed : `${trimmed}.`;
 }
 
@@ -997,27 +998,62 @@ function submitQuestion(question) {
   window.setTimeout(() => answerQuestion(trimmed), 180);
 }
 
+function submitCommandItem(item) {
+  addMessage("user", item.label);
+  input.value = "";
+  const lead = "<p>この設定コマンドを試してください。</p>";
+  window.setTimeout(() => addMessage("bot", lead + commandToHtml(item), { html: true }), 180);
+}
+
+function openPdf(path) {
+  window.open(path, "_blank", "noopener");
+}
+
 function renderQuickActions() {
-  const featuredIds = ["df-show", "df-example-replace-gs-with-slash", "df-example-qr-20-first-10", "df-clear-all"];
-  featuredIds
-    .map((id) => commandCatalog.find((item) => item.id === id))
-    .forEach((item) => {
+  const quickItems = [
+    { type: "command", item: commandCatalog.find((item) => item.id === "df-show") },
+    {
+      type: "pdf",
+      label: "ASCII表",
+      summary: "Hex/ASCII表をPDFで表示します。",
+      path: "HonASCII.pdf",
+    },
+    {
+      type: "pdf",
+      label: "データフォーマット機能説明",
+      summary: "Data Formatの機能説明をPDFで表示します。",
+      path: "HonDataFormat.pdf",
+    },
+    { type: "command", item: commandCatalog.find((item) => item.id === "df-clear-all") },
+  ];
+
+  quickItems
+    .filter((entry) => entry.type === "pdf" || entry.item)
+    .forEach((entry) => {
+      const item = entry.item;
       const button = document.createElement("button");
       button.type = "button";
       button.className = "quick-action";
       button.innerHTML = `
-        <span class="quick-icon">${iconForCategory(item.category)}</span>
+        <span class="quick-icon">${entry.type === "pdf" ? icons.scan : iconForCategory(item.category)}</span>
         <span>
-          <strong>${escapeHtml(item.label)}</strong>
-          <span>${escapeHtml(item.summary)}</span>
+          <strong>${escapeHtml(entry.type === "pdf" ? entry.label : item.label)}</strong>
+          <span>${escapeHtml(entry.type === "pdf" ? entry.summary : item.summary)}</span>
         </span>
       `;
-      button.addEventListener("click", () => submitQuestion(item.label));
+      button.addEventListener("click", () => {
+        if (entry.type === "pdf") {
+          openPdf(entry.path);
+          return;
+        }
+        submitCommandItem(item);
+      });
       quickActions.append(button);
     });
 }
 
 function renderCategories() {
+  if (!categoryList) return;
   const categories = [...new Set(commandCatalog.map((item) => item.category))];
   categories.forEach((category) => {
     const item = document.createElement("li");

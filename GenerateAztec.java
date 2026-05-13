@@ -17,12 +17,12 @@ public class GenerateAztec {
         }
 
         byte[] data = args[0].getBytes(StandardCharsets.ISO_8859_1);
-        AztecCode code = Encoder.encode(data, 33, 0);
+        AztecCode code = encodeFullRange(data);
         BitMatrix matrix = code.getMatrix();
         applyReaderInitializationMode(matrix, code.isCompact(), code.getLayers(), code.getCodeWords());
 
         int quiet = 2;
-        int scale = 4;
+        int scale = 8;
         int width = (matrix.getWidth() + quiet * 2) * scale;
         int height = (matrix.getHeight() + quiet * 2) * scale;
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -48,6 +48,17 @@ public class GenerateAztec {
         String output = args[1];
         String format = output.toLowerCase().endsWith(".bmp") ? "bmp" : "png";
         ImageIO.write(image, format, new File(output));
+    }
+
+    private static AztecCode encodeFullRange(byte[] data) {
+        for (int layers = 1; layers <= 32; layers++) {
+            try {
+                return Encoder.encode(data, 33, layers);
+            } catch (IllegalArgumentException ignored) {
+                // Try the next full-range layer when the current layer has no capacity.
+            }
+        }
+        throw new IllegalArgumentException("Data is too large for Full-Range Aztec.");
     }
 
     private static void applyReaderInitializationMode(BitMatrix matrix, boolean compact, int layers, int codeWords) throws Exception {

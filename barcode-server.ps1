@@ -61,6 +61,9 @@ function Normalize-SettingCommand {
   param([string]$Command)
 
   $trimmed = $Command.Trim()
+  if ($trimmed.EndsWith("?")) {
+    return $trimmed
+  }
   if (-not $trimmed.EndsWith(".")) {
     $trimmed = "$trimmed."
   }
