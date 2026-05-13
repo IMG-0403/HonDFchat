@@ -877,7 +877,8 @@ function normalizeSettingCommand(command) {
 }
 
 function getEzConfigBarcodeUrl(command) {
-  return `http://127.0.0.1:8765/barcode?cmd=${encodeURIComponent(normalizeSettingCommand(command))}`;
+  const apiUrl = window.HON_BARCODE_API_URL || "http://127.0.0.1:8765/barcode";
+  return `${apiUrl}?cmd=${encodeURIComponent(normalizeSettingCommand(command))}`;
 }
 
 function renderAztecBarcodes(root = document) {
@@ -911,7 +912,7 @@ function renderAztecBarcodes(root = document) {
       canvas.dataset.rendered = "true";
       status.textContent = "";
     } catch (error) {
-      status.textContent = "EZConfig方式の設定バーコード生成サーバーを起動してください。";
+      status.textContent = "Supabaseの設定バーコード生成APIに接続できません。";
     }
   });
 }
