@@ -149,8 +149,8 @@ const commandCatalog = [
     category: "削除",
     summary: "登録済みのデータフォーマットをすべて削除します。",
     keywords: ["clear all", "全削除", "全部", "すべて", "削除", "消す", "クリア"],
-    command: "DFMCA3.",
-    notes: ["PDF 103Pの Clear All Data Formats に対応します。", "Prefix/Suffix など他章の設定は削除対象ではありません。"],
+    command: "DFMDF3.",
+    notes: ["PDF 103Pの Data Format 初期化に対応します。", "Prefix/Suffix など他章の設定は削除対象ではありません。"],
   },
   {
     id: "df-off",
@@ -780,8 +780,8 @@ function commandToHtml(item) {
         </div>
         <canvas
           class="aztec-canvas"
-          width="190"
-          height="190"
+          width="260"
+          height="260"
           data-setting-command="${escapeHtml(settingCommand)}"
           aria-label="設定用AZTECバーコード"
         ></canvas>
@@ -875,34 +875,42 @@ function normalizeSettingCommand(command) {
   return trimmed.endsWith(".") ? trimmed : `${trimmed}.`;
 }
 
-function buildSettingBarcodePayload(command) {
-  return `${String.fromCharCode(0x16)}M${String.fromCharCode(0x0d)}${normalizeSettingCommand(command)}`;
+function getEzConfigBarcodeUrl(command) {
+  return `http://127.0.0.1:8765/barcode?cmd=${encodeURIComponent(normalizeSettingCommand(command))}`;
 }
 
 function renderAztecBarcodes(root = document) {
   const canvases = root.querySelectorAll(".aztec-canvas:not([data-rendered])");
-  canvases.forEach((canvas) => {
+  canvases.forEach(async (canvas) => {
     const status = canvas.parentElement.querySelector(".barcode-status");
     const command = canvas.dataset.settingCommand;
 
-    if (!window.bwipjs) {
-      status.textContent = "AZTEC生成ライブラリを読み込めませんでした。インターネット接続を確認してください。";
-      return;
-    }
-
     try {
-      window.bwipjs.toCanvas(canvas, {
-        bcid: "azteccode",
-        text: buildSettingBarcodePayload(command),
-        format: "full",
-        scale: 4,
-        padding: 8,
-        backgroundcolor: "FFFFFF",
-      });
+      const response = await fetch(getEzConfigBarcodeUrl(command));
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const image = new Image();
+      const imageUrl = URL.createObjectURL(blob);
+      image.onload = () => {
+        const context = canvas.getContext("2d");
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0);
+        URL.revokeObjectURL(imageUrl);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(imageUrl);
+        status.textContent = "EZConfig方式の設定バーコード画像を読み込めませんでした。";
+      };
+      image.src = imageUrl;
       canvas.dataset.rendered = "true";
       status.textContent = "";
     } catch (error) {
-      status.textContent = `AZTEC生成に失敗しました: ${error.message}`;
+      status.textContent = "EZConfig方式の設定バーコード生成サーバーを起動してください。";
     }
   });
 }
@@ -990,7 +998,7 @@ function submitQuestion(question) {
 }
 
 function renderQuickActions() {
-  const featuredIds = ["df-show", "df-example-replace-gs-with-slash", "df-example-qr-20-first-10", "df-clear-all", "df-on-keep"];
+  const featuredIds = ["df-show", "df-example-replace-gs-with-slash", "df-example-qr-20-first-10", "df-clear-all"];
   featuredIds
     .map((id) => commandCatalog.find((item) => item.id === id))
     .forEach((item) => {
