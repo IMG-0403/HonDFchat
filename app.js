@@ -890,7 +890,8 @@ function renderAztecBarcodes(root = document) {
     try {
       const response = await fetch(getEzConfigBarcodeUrl(command));
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const detail = await response.text();
+        throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
       }
 
       const blob = await response.blob();
@@ -912,7 +913,7 @@ function renderAztecBarcodes(root = document) {
       canvas.dataset.rendered = "true";
       status.textContent = "";
     } catch (error) {
-      status.textContent = "Supabaseの設定バーコード生成APIに接続できません。";
+      status.textContent = `Supabaseの設定バーコード生成APIに接続できません。${error.message || ""}`;
     }
   });
 }
