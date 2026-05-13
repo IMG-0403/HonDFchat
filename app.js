@@ -411,15 +411,13 @@ function buildLeadingCharactersCommand(query) {
   const characterCount = Number(match[1]);
   if (!Number.isInteger(characterCount) || characterCount < 1 || characterCount > 99) return null;
 
-  const hasSymbologyTarget = ["qr", "qrコード", "code128", "code 128", "コード128", "ocr"].some((word) =>
-    normalizedQuery.includes(normalizeText(word))
-  );
+  const symbology = getSymbologyTarget(normalizedQuery);
   const readLengthMatch = normalizedQuery.match(/(\d{1,4})\s*桁\s*(?:読み取り|読取|バーコード|コード)/);
   const readLength = readLengthMatch ? Number(readLengthMatch[1]) : null;
 
-  if (hasSymbologyTarget) return null;
-
   const countHex = characterCount.toString().padStart(2, "0");
+  const codeId = symbology ? symbology.codeId : "99";
+  const codeLabel = symbology ? symbology.label : "全コード種";
   const lengthField = readLength ? String(readLength).padStart(4, "0") : "9999";
   const labelTarget = readLength ? `${readLength}桁バーコード限定で` : "全桁数で";
   const summaryTarget = readLength ? `${readLength}桁のバーコードだけを対象に、` : "読取桁数を限定せず、";
@@ -428,14 +426,14 @@ function buildLeadingCharactersCommand(query) {
     : "9999 は全桁数を表す指定です。";
 
   return {
-    id: `df-generated-all-${lengthField}-first-${countHex}`,
-    label: `全コード種・${labelTarget}先頭${characterCount}桁を出力`,
+    id: `df-generated-${codeId}-${lengthField}-first-${countHex}`,
+    label: `${codeLabel}・${labelTarget}先頭${characterCount}桁を出力`,
     category: "登録例",
-    summary: `全コード種を対象に、${summaryTarget}読み取りデータの先頭${characterCount}桁のみを出力します。`,
+    summary: `${codeLabel}を対象に、${summaryTarget}読み取りデータの先頭${characterCount}桁のみを出力します。`,
     keywords: [],
-    command: `DFMBK3009999${lengthField}F2${countHex}00.`,
+    command: `DFMBK30099${codeId}${lengthField}F2${countHex}00.`,
     notes: [
-      `コード種の指定がないため、99 は全コード種を表す指定にします。${lengthNote}`,
+      `${codeId} は${codeLabel}を表す指定です。${lengthNote}`,
       `F2${countHex}00 は先頭から${characterCount}桁を送信する Data Format Editor コマンドです。`,
     ],
   };
