@@ -922,7 +922,7 @@ function findExactDeleteCharacterCommand(query) {
   };
 }
 
-function getReadLengthsForSuffixCtrl(normalizedQuery) {
+function getReadLengthsForSuffixB5(normalizedQuery) {
   const structuredLengths = getReadLengths(normalizedQuery);
   if (structuredLengths.length > 0) return structuredLengths;
 
@@ -935,17 +935,23 @@ function getReadLengthsForSuffixCtrl(normalizedQuery) {
   return [...new Set(matches.map((match) => Number(match[1])).filter((length) => Number.isInteger(length) && length >= 0 && length <= 9999))];
 }
 
-function buildSuffixCtrlCommand(query) {
+function buildSuffixB5Command(query) {
   const normalizedQuery = normalizeText(query);
-  const mentionsCtrl = ["ctrl", "control", "コントロール"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsModifier = ["ctrl", "control", "コントロール", "alt", "shift"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsSuffix = ["末尾", "後ろ", "最後"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsAppend = ["付加", "追加", "つける", "付ける"].some((word) => normalizedQuery.includes(normalizeText(word)));
 
-  if (!mentionsCtrl || !mentionsSuffix || !mentionsAppend) return null;
+  if (!mentionsSuffix || !mentionsAppend) return null;
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
-  const readLengths = getReadLengthsForSuffixCtrl(normalizedQuery);
-  const editorCommand = "F100B5012040";
+  const readLengths = getReadLengthsForSuffixB5(normalizedQuery);
+  const key = findB5KeyForAppend(query);
+  const modifier = getB5ModifierForAppend(query);
+  if (!key && !mentionsModifier) return null;
+
+  const keystrokeCommand = key ? `B501${modifier.hex}${key.hex}` : "B5012040";
+  const keystrokeLabel = key ? `${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key}` : "CTRL";
+  const editorCommand = `F100${keystrokeCommand}`;
   const codeLabel = symbologyTargets.map((item) => item.label).join("、");
   const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
   const lengthNote = readLengths.length > 0
@@ -953,16 +959,16 @@ function buildSuffixCtrlCommand(query) {
     : "9999 は全桁数を表す指定です。";
 
   return {
-    id: `df-generated-suffix-ctrl-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
-    label: `${codeLabel}・${lengthLabel} 末尾にCTRLを付加`,
+    id: `df-generated-suffix-b5-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${keystrokeCommand}`,
+    label: `${codeLabel}・${lengthLabel} 末尾に${keystrokeLabel}を付加`,
     category: "登録例",
-    summary: `${codeLabel}・${lengthLabel}を対象に、読み取りデータを出力して末尾にCTRLキーを付加します。`,
+    summary: `${codeLabel}・${lengthLabel}を対象に、読み取りデータを出力して末尾に${keystrokeLabel}キーを付加します。`,
     keywords: [],
     command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
     notes: [
       `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は ${item.label}`).join("、")} を表す指定です。`,
       lengthNote,
-      "F100 は読み取りデータを全て出力し、B5012040 は末尾に CTRL キーを付加する指定です。",
+      `F100 は読み取りデータを全て出力し、${keystrokeCommand} は末尾に ${keystrokeLabel} キーを付加する指定です。左右指定がない修飾キーは左優先です。`,
       "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。",
     ],
   };
@@ -1615,7 +1621,7 @@ function renderAztecBarcodes(root = document) {
 
 function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
-  const suffixCtrlCommand = buildSuffixCtrlCommand(question);
+  const suffixB5Command = buildSuffixB5Command(question);
   const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
@@ -1642,8 +1648,8 @@ function answerQuestion(question) {
     return;
   }
 
-  if (suffixCtrlCommand) {
-    addMessage("bot", commandToHtml(suffixCtrlCommand), { html: true });
+  if (suffixB5Command) {
+    addMessage("bot", commandToHtml(suffixB5Command), { html: true });
     return;
   }
 
