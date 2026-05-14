@@ -1451,6 +1451,161 @@ function applyClearSettingsPrefix(item, shouldPrefix) {
   };
 }
 
+function getSymbologyLabelById(codeId) {
+  return symbologyCodeTable.find((item) => item.codeId.toUpperCase() === codeId.toUpperCase())?.label || `コードID ${codeId}`;
+}
+
+function getB5KeyLabelByHex(hex) {
+  return b5KeyMapTable.find((item) => item.hex.toUpperCase() === hex.toUpperCase())?.key || `キー番号 ${hex}`;
+}
+
+function getB5ModifierLabelByHex(hex) {
+  return b5ModifierTable.find((item) => item.hex.toUpperCase() === hex.toUpperCase())?.label || `修飾キー ${hex}`;
+}
+
+function isDataFormatCommandText(value) {
+  const command = value.trim().toUpperCase();
+  return /^DFM(?:BK3|DF3|DF|CL3)|^DFMDF3[.;]?/.test(command);
+}
+
+function isEmptyDataFormatCommand(value) {
+  return value.trim().replace(/\s+/g, "").toUpperCase() === "DFMBK3.";
+}
+
+function describeEditorCommands(commandHex) {
+  const descriptions = [];
+  let cursorPosition = 1;
+  let index = 0;
+
+  while (index < commandHex.length) {
+    const code = commandHex.slice(index, index + 2).toUpperCase();
+
+    if (code === "F5" && index + 4 <= commandHex.length) {
+      const move = Number(commandHex.slice(index + 2, index + 4));
+      cursorPosition += move;
+      descriptions.push(`F5${commandHex.slice(index + 2, index + 4)}: カーソルを${move}桁進め、${cursorPosition}桁目の手前へ移動します。`);
+      index += 4;
+      continue;
+    }
+
+    if (code === "F2" && index + 6 <= commandHex.length) {
+      const count = Number(commandHex.slice(index + 2, index + 4));
+      const insertHex = commandHex.slice(index + 4, index + 6).toUpperCase();
+      descriptions.push(`F2${commandHex.slice(index + 2, index + 6)}: 現在位置から${count}桁を出力します${insertHex === "00" ? "" : `。最後に ${insertHex} を追加します`}`);
+      cursorPosition += count;
+      index += 6;
+      continue;
+    }
+
+    if (code === "F1" && index + 4 <= commandHex.length) {
+      const insertHex = commandHex.slice(index + 2, index + 4).toUpperCase();
+      descriptions.push(`F1${insertHex}: 現在位置から末尾までを出力します${insertHex === "00" ? "" : `。最後に ${insertHex} を追加します`}`);
+      index += 4;
+      continue;
+    }
+
+    if (code === "E6" && index + 4 <= commandHex.length) {
+      const targetHex = commandHex.slice(index + 2, index + 4).toUpperCase();
+      const targetText = targetHex === "30" ? "0" : targetHex;
+      descriptions.push(`E6${targetHex}: 現在位置から ${targetText} 以外のキャラクタ手前まで移動します。`);
+      index += 4;
+      continue;
+    }
+
+    if (code === "EF" && index + 6 <= commandHex.length) {
+      const efCommand = commandHex.slice(index, index + 6).toUpperCase();
+      const delay = efDelayTable.find((item) => item.command === efCommand)?.delay || `${Number(commandHex.slice(index + 2, index + 6)) * 5}ms`;
+      descriptions.push(`${efCommand}: ${delay}待機します。`);
+      index += 6;
+      continue;
+    }
+
+    if (code === "B5" && index + 8 <= commandHex.length) {
+      const keyCount = Number(commandHex.slice(index + 2, index + 4));
+      const parts = [];
+      let offset = index + 4;
+      for (let keyIndex = 0; keyIndex < keyCount && offset + 4 <= commandHex.length; keyIndex += 1) {
+        const modifierHex = commandHex.slice(offset, offset + 2).toUpperCase();
+        const keyHex = commandHex.slice(offset + 2, offset + 4).toUpperCase();
+        const modifierLabel = getB5ModifierLabelByHex(modifierHex);
+        const keyLabel = getB5KeyLabelByHex(keyHex);
+        parts.push(`${modifierHex === "00" ? "" : `${modifierLabel}+`}${keyLabel}`);
+        offset += 4;
+      }
+      descriptions.push(`B5${commandHex.slice(index + 2, offset)}: ${parts.join("、")} をキーストロークとして付加します。`);
+      index = offset;
+      continue;
+    }
+
+    if (code === "E4" && index + 4 <= commandHex.length) {
+      const count = Number(commandHex.slice(index + 2, index + 4));
+      const length = 4 + count * 4;
+      descriptions.push(`${commandHex.slice(index, index + length)}: ${count}種類のキャラクタを置換します。`);
+      index += length;
+      continue;
+    }
+
+    if (code === "FB" && index + 4 <= commandHex.length) {
+      const count = Number(commandHex.slice(index + 2, index + 4));
+      const length = 4 + count * 2;
+      descriptions.push(`${commandHex.slice(index, index + length)}: ${count}種類のキャラクタを無効化します。`);
+      index += length;
+      continue;
+    }
+
+    descriptions.push(`${code}: 未対応または解析できない編集コマンドです。`);
+    index += 2;
+  }
+
+  return descriptions;
+}
+
+function explainDataFormatCommandToHtml(rawCommand) {
+  const command = normalizeSettingCommand(rawCommand).replace(/\s+/g, "").toUpperCase();
+  const withoutClear = command.startsWith("DFMDF3;") ? command.slice("DFMDF3;".length) : command;
+  if (!withoutClear.startsWith("DFMBK3")) return "";
+
+  const fragments = withoutClear.replace(/\.$/, "").split("|");
+  const conditionHtml = fragments.map((fragment, index) => {
+    const body = index === 0 ? fragment.slice("DFMBK3".length) : fragment;
+    if (body.length < 10) return `<p>条件 ${index + 1}: 条件ブロックの長さが不足しています。</p>`;
+
+    const formatNumber = body.slice(0, 1);
+    const terminalId = body.slice(1, 4);
+    const codeId = body.slice(4, 6);
+    const lengthField = body.slice(6, 10);
+    const editorCommand = body.slice(10);
+    const symbologyLabel = getSymbologyLabelById(codeId);
+    const lengthLabel = lengthField === "9999" ? "全桁数" : `${Number(lengthField)}桁`;
+    const editorDescriptions = describeEditorCommands(editorCommand);
+
+    return `
+      <div class="df-explain-condition">
+        <strong>条件 ${index + 1}</strong>
+        <ul>
+          <li>形式: ${escapeHtml(formatNumber === "0" ? "Primary Data Format" : `Format ${formatNumber}`)}</li>
+          <li>端末ID: ${escapeHtml(terminalId === "099" ? "全端末" : terminalId)}</li>
+          <li>コード種: ${escapeHtml(codeId)} / ${escapeHtml(symbologyLabel)}</li>
+          <li>桁数: ${escapeHtml(lengthField)} / ${escapeHtml(lengthLabel)}</li>
+          <li>編集コマンド: ${escapeHtml(editorCommand)}</li>
+        </ul>
+        <ol>${editorDescriptions.map((description) => `<li>${escapeHtml(description)}</li>`).join("")}</ol>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="command-card">
+      <div>
+        <div class="command-title">設定コマンドの内容</div>
+        <div class="command-code"><span>${escapeHtml(command)}</span></div>
+      </div>
+      ${command.startsWith("DFMDF3;") ? "<p>先頭の DFMDF3; により、現在のデータフォーマット設定を削除してから登録します。</p>" : ""}
+      ${conditionHtml}
+    </div>
+  `;
+}
+
 function functionCodesToHtml(items) {
   const rows = items
     .map((item) => {
@@ -1720,6 +1875,17 @@ function renderAztecBarcodes(root = document) {
 }
 
 function answerQuestion(question) {
+  if (isEmptyDataFormatCommand(question)) {
+    addMessage("bot", "現在はデータフォーマット設定されていません。");
+    return;
+  }
+
+  if (isDataFormatCommandText(question)) {
+    const explanationHtml = explainDataFormatCommandToHtml(question);
+    addMessage("bot", explanationHtml || barcodeUnavailableHtml, { html: true });
+    return;
+  }
+
   const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
   const commandHtml = (item) => commandToHtml(applyClearSettingsPrefix(item, shouldClearSettings));
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
