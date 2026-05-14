@@ -744,7 +744,7 @@ function buildRangeCharactersCommand(query) {
 
 function buildFromPositionToEndCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const match = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から(?:末尾|最後|全部|すべて|全て)?)/);
+  const match = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:末尾|最後|全部|すべて|全て))/);
 
   if (!match || !/(出力|送信|表示|取り出|切り出)/.test(normalizedQuery)) return null;
 
@@ -1895,8 +1895,8 @@ function answerQuestion(question) {
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
-  const fromPositionToEndCommand = buildFromPositionToEndCommand(question);
   const generatedRangeCommand = buildRangeCharactersCommand(question);
+  const fromPositionToEndCommand = buildFromPositionToEndCommand(question);
   const generatedLeadingCommand = buildLeadingCharactersCommand(question);
   const efDelayMatches = findEfDelays(question);
   const b5ModifierMatches = findB5Modifiers(question);
@@ -1938,13 +1938,13 @@ function answerQuestion(question) {
     return;
   }
 
-  if (fromPositionToEndCommand) {
-    addMessage("bot", commandHtml(fromPositionToEndCommand), { html: true });
+  if (generatedRangeCommand) {
+    addMessage("bot", commandHtml(generatedRangeCommand), { html: true });
     return;
   }
 
-  if (generatedRangeCommand) {
-    addMessage("bot", commandHtml(generatedRangeCommand), { html: true });
+  if (fromPositionToEndCommand) {
+    addMessage("bot", commandHtml(fromPositionToEndCommand), { html: true });
     return;
   }
 
