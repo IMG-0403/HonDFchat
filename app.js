@@ -426,6 +426,8 @@ const barcodeUnavailableText =
 const welcomeText =
   "";
 
+let adminCommandCatalog = [];
+
 const messages = document.querySelector("#messages");
 const form = document.querySelector("#chatForm");
 const input = document.querySelector("#messageInput");
@@ -446,7 +448,19 @@ function normalizeText(value) {
 function scoreCommand(query, item) {
   const normalizedQuery = normalizeText(query);
   const normalizedLabel = normalizeText(item.label);
+  const normalizedSummary = normalizeText(item.summary || "");
+  const normalizedRequestText = normalizeText(item.requestText || "");
   let score = normalizedQuery.includes(normalizedLabel) ? 6 : 0;
+
+  if (normalizedRequestText && normalizedQuery.includes(normalizedRequestText)) {
+    score += 10;
+  } else if (normalizedRequestText && normalizedRequestText.includes(normalizedQuery)) {
+    score += 8;
+  }
+
+  if (normalizedSummary && normalizedQuery.includes(normalizedSummary)) {
+    score += 4;
+  }
 
   item.keywords.forEach((keyword) => {
     const normalizedKeyword = normalizeText(keyword);
@@ -463,12 +477,16 @@ function scoreCommand(query, item) {
 }
 
 function findMatches(query) {
-  return commandCatalog
+  return getAllCommandCatalog()
     .map((item) => ({ item, score: scoreCommand(query, item) }))
     .filter((result) => result.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map((result) => result.item);
+}
+
+function getAllCommandCatalog() {
+  return [...commandCatalog, ...adminCommandCatalog];
 }
 
 function getSymbologyTarget(normalizedQuery) {
@@ -1041,7 +1059,6 @@ function commandToHtml(item) {
       <div class="aztec-card">
         <div>
           <strong>設定用バーコード</strong>
-          <p>${escapeHtml(settingCommand)}</p>
         </div>
         <canvas
           class="aztec-canvas"
@@ -1193,6 +1210,52 @@ function normalizeSettingCommand(command) {
 function getEzConfigBarcodeUrl(command) {
   const apiUrl = window.HON_BARCODE_API_URL || "http://127.0.0.1:8765/barcode";
   return `${apiUrl}?cmd=${encodeURIComponent(normalizeSettingCommand(command))}`;
+}
+
+function getSupabaseConfig() {
+  return {
+    url: (window.HON_SUPABASE_URL || "").replace(/\/$/, ""),
+    anonKey: window.HON_SUPABASE_ANON_KEY || "",
+  };
+}
+
+async function loadAdminCommandCatalog() {
+  const { url, anonKey } = getSupabaseConfig();
+  if (!url || !anonKey) return;
+
+  try {
+    const response = await fetch(`${url}/rest/v1/barcode_requests?select=id,title,request_text,command,notes,keywords&status=eq.published&order=updated_at.desc`, {
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+    });
+
+    if (!response.ok) return;
+
+    const rows = await response.json();
+    adminCommandCatalog = rows
+      .filter((row) => row.request_text && row.command)
+      .map((row) => ({
+        id: `admin-${row.id}`,
+        label: row.title || row.request_text,
+        category: "管理者登録",
+        summary: row.request_text,
+        requestText: row.request_text,
+        keywords: Array.isArray(row.keywords) ? row.keywords : splitKeywords(row.keywords || ""),
+        command: row.command,
+        notes: row.notes ? [row.notes] : [],
+      }));
+  } catch {
+    adminCommandCatalog = [];
+  }
+}
+
+function splitKeywords(value) {
+  return String(value)
+    .split(/\s*(?:,|、|\n)\s*/)
+    .map((keyword) => keyword.trim())
+    .filter(Boolean);
 }
 
 function renderAztecBarcodes(root = document) {
@@ -1384,7 +1447,7 @@ samplePrompt?.addEventListener("click", () => {
 
 renderQuickActions();
 renderCategories();
-addMessage("bot", welcomeText);
+loadAdminCommandCatalog().finally(() => addMessage("bot", welcomeText));
 
 async function copyToClipboard(value) {
   if (navigator.clipboard && window.isSecureContext) {

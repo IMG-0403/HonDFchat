@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HON DATA FORMAT Admin</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <header class="admin-header">
+        <div>
+          <p class="eyebrow">HON DATA FORMAT</p>
+          <h1>管理者ページ</h1>
+        </div>
+        <a class="admin-link" href="index.html">一般公開ページ</a>
+      </header>
+
+      <section class="admin-card" id="setupNotice" hidden>
+        <h2>Supabase設定が必要です</h2>
+        <p>config.js の HON_SUPABASE_ANON_KEY にSupabaseのanon keyを設定してください。</p>
+      </section>
+
+      <section class="admin-card" id="loginPanel">
+        <h2>ログイン</h2>
+        <form class="admin-form" id="loginForm">
+          <label>
+            ID
+            <input id="loginId" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            パスワード
+            <input id="loginPassword" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="admin-button" type="submit">ログイン</button>
+        </form>
+      </section>
+
+      <section class="admin-content" id="adminContent" hidden>
+        <section class="admin-card">
+          <div class="admin-card-header">
+            <h2>依頼設定内容を登録</h2>
+            <button class="admin-button secondary" id="logoutButton" type="button">ログアウト</button>
+          </div>
+          <form class="admin-form" id="requestForm">
+            <input id="recordId" type="hidden" />
+            <label>
+              タイトル
+              <input id="titleInput" autocomplete="off" placeholder="例: QR10桁と20桁 3桁目から5桁出力" />
+            </label>
+            <label>
+              依頼設定内容
+              <textarea id="requestTextInput" rows="4" required placeholder="例: QR10桁と20桁読み取り時に3桁目から5桁出力"></textarea>
+            </label>
+            <label>
+              設定コマンド
+              <textarea id="commandInput" rows="3" required placeholder="例: DFMBK30099730010F502F20500|0099730020F502F20500."></textarea>
+            </label>
+            <label>
+              キーワード
+              <input id="keywordsInput" autocomplete="off" placeholder="例: QR, 10桁, 20桁, 3桁目" />
+            </label>
+            <label>
+              備考
+              <textarea id="notesInput" rows="3"></textarea>
+            </label>
+            <label>
+              公開状態
+              <select id="statusInput">
+                <option value="draft">下書き</option>
+                <option value="published">公開</option>
+                <option value="archived">保管</option>
+              </select>
+            </label>
+            <div class="admin-actions">
+              <button class="admin-button" type="submit">保存</button>
+              <button class="admin-button secondary" id="resetButton" type="button">新規入力</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="admin-card">
+          <div class="admin-card-header">
+            <h2>登録一覧</h2>
+            <button class="admin-button secondary" id="refreshButton" type="button">更新</button>
+          </div>
+          <div class="admin-list" id="requestList"></div>
+        </section>
+      </section>
+
+      <p class="admin-status" id="statusMessage" role="status"></p>
+    </main>
+
+    <script src="config.js"></script>
+    <script type="module" src="admin.js"></script>
+  </body>
+</html>

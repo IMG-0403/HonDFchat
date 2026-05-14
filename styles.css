@@ -461,6 +461,125 @@ h2 {
   margin: 4px 0 0;
 }
 
+.admin-shell {
+  display: grid;
+  gap: 16px;
+  width: min(1040px, calc(100vw - 32px));
+  margin: 16px auto;
+}
+
+.admin-header,
+.admin-card {
+  padding: 18px 20px;
+  border: 1px solid rgba(217, 224, 220, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.admin-header,
+.admin-card-header,
+.admin-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-link {
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+
+.admin-content {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+  gap: 16px;
+}
+
+.admin-form {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.admin-form input,
+.admin-form textarea,
+.admin-form select {
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.admin-button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 800;
+}
+
+.admin-button.secondary {
+  background: var(--surface);
+  color: var(--accent-dark);
+}
+
+.admin-button.danger {
+  border-color: rgba(155, 77, 18, 0.45);
+  background: #fff7ed;
+  color: var(--warning);
+}
+
+.admin-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-list-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.admin-list-item > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-list-item span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.admin-list-item code {
+  padding: 8px;
+  border-radius: 7px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  overflow-wrap: anywhere;
+}
+
+.admin-status {
+  min-height: 24px;
+  margin: 0;
+  color: var(--warning);
+  font-weight: 700;
+}
+
 .aztec-card {
   display: grid;
   justify-items: start;
