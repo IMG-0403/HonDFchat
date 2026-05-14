@@ -476,6 +476,22 @@ function getSymbologyTarget(normalizedQuery) {
   }) || null;
 }
 
+function getSymbologyTargets(normalizedQuery) {
+  const targets = symbologyCodeTable.filter((item) => {
+    if (item.codeId === "99") return false;
+    const codeId = normalizeText(item.codeId);
+    const label = normalizeText(item.label);
+    const aliases = (item.aliases || []).map(normalizeText);
+    return normalizedQuery.includes(codeId) || normalizedQuery.includes(label) || aliases.some((alias) => normalizedQuery.includes(alias));
+  });
+
+  return targets.length > 0 ? targets : [symbologyCodeTable[0]];
+}
+
+function buildDataFormatCommandFromBlocks(blocks) {
+  return blocks.map((block, index) => (index === 0 ? `DFMBK3${block}` : block)).join("|") + ".";
+}
+
 function buildLeadingCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
   const match = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,2})\s*桁/);
@@ -485,13 +501,12 @@ function buildLeadingCharactersCommand(query) {
   const characterCount = Number(match[1]);
   if (!Number.isInteger(characterCount) || characterCount < 1 || characterCount > 99) return null;
 
-  const symbology = getSymbologyTarget(normalizedQuery);
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengthMatch = normalizedQuery.match(/(\d{1,4})\s*桁\s*(?:読み取り|読取|バーコード|コード)/);
   const readLength = readLengthMatch ? Number(readLengthMatch[1]) : null;
 
   const countHex = characterCount.toString().padStart(2, "0");
-  const codeId = symbology ? symbology.codeId : "99";
-  const codeLabel = symbology ? symbology.label : "全コード種";
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
   const lengthField = readLength ? String(readLength).padStart(4, "0") : "9999";
   const labelTarget = readLength ? `${readLength}桁バーコード限定で` : "全桁数で";
   const summaryTarget = readLength ? `${readLength}桁のバーコードだけを対象に、` : "読取桁数を限定せず、";
@@ -500,14 +515,15 @@ function buildLeadingCharactersCommand(query) {
     : "9999 は全桁数を表す指定です。";
 
   return {
-    id: `df-generated-${codeId}-${lengthField}-first-${countHex}`,
+    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${lengthField}-first-${countHex}`,
     label: `${codeLabel}・${labelTarget}先頭${characterCount}桁を出力`,
     category: "登録例",
     summary: `${codeLabel}を対象に、${summaryTarget}読み取りデータの先頭${characterCount}桁のみを出力します。`,
     keywords: [],
-    command: `DFMBK30099${codeId}${lengthField}F2${countHex}00.`,
+    command: buildDataFormatCommandFromBlocks(symbologyTargets.map((item) => `0099${item.codeId}${lengthField}F2${countHex}00`)),
     notes: [
-      `${codeId} は${codeLabel}を表す指定です。${lengthNote}`,
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      "複数条件は | で区切り、2件目以降は DFMBK3 を付けずに条件ブロックだけを連結します。",
       `F2${countHex}00 は先頭から${characterCount}桁を送信する Data Format Editor コマンドです。`,
     ],
   };
@@ -697,14 +713,27 @@ function buildReplaceThenRangeCommand(query) {
 }
 
 function findDeleteTargetCharacter(query) {
+  return findDeleteTargetCharacters(query)[0] || null;
+}
+
+function findDeleteTargetCharacters(query) {
   const normalizedCaseQuery = query
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
     .replace(/\s+/g, " ")
     .trim();
-  const namedTargetMatch = normalizedCaseQuery.match(/(スペース|space|空白|スラッシュ|slash)\s*(?:を)?\s*(?:削除|除去|消す|消して)/i);
-  const asciiTargetMatch = normalizedCaseQuery.match(/([!-~])\s*(?:を)?\s*(?:削除|除去|消す|消して)/i);
-  const targetValue = namedTargetMatch?.[1] || asciiTargetMatch?.[1];
-  return targetValue ? normalizeReplaceCharacter(targetValue) : null;
+  const targetMatch = normalizedCaseQuery.match(/(.+?)\s*(?:を)?\s*(?:削除|除去|消す|消して)/i);
+  if (!targetMatch) return [];
+
+  const targetText = targetMatch[1]
+    .replace(/^(?:.*?時|.*?場合|.*?とき)\s*/i, "")
+    .replace(/^(?:に|、|,|\s)+/, "")
+    .trim();
+  const rawTargets = targetText
+    .split(/\s*(?:と|、|,|，|\/|\+|&|and)\s*/i)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return rawTargets.map(normalizeReplaceCharacter).filter(Boolean);
 }
 
 function normalizeReplaceCharacter(value) {
@@ -727,21 +756,26 @@ function findExactDeleteCharacterCommand(query) {
   const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
   if (!mentionsDelete) return null;
 
-  const targetChar = findDeleteTargetCharacter(query);
-  if (!targetChar) return null;
+  const targetChars = findDeleteTargetCharacters(query);
+  if (targetChars.length === 0) return null;
 
-  const targetHex = targetChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const symbology = getSymbologyTarget(normalizedQuery);
+  const codeId = symbology ? symbology.codeId : "99";
+  const codeLabel = symbology ? symbology.label : "全コード種";
+  const targetHex = targetChars.map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
+  const suppressCount = targetChars.length.toString().padStart(2, "0");
+  const targetLabel = targetChars.map(describeReplaceCharacter).join("と");
 
   return {
-    id: `df-generated-delete-${targetHex}`,
-    label: `${describeReplaceCharacter(targetChar)}を削除`,
+    id: `df-generated-delete-${targetHex}-${codeId}`,
+    label: `${codeLabel} ${targetLabel}を削除`,
     category: "登録例",
-    summary: `コード種、桁数に関係なく、${describeReplaceCharacter(targetChar)}を削除して出力します。`,
+    summary: `${codeLabel}を対象に、${targetLabel}を削除して出力します。`,
     keywords: [],
-    command: `DFMBK30099999999FB01${targetHex}F100.`,
+    command: `DFMBK30099${codeId}9999FB${suppressCount}${targetHex}F100.`,
     notes: [
-      "0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。",
-      `FB は削除コマンド、01 は削除キャラクタ数、${targetHex} は削除対象の ${describeReplaceCharacter(targetChar)} です。`,
+      `0 は Primary Data Format、099 は全端末、${codeId} は${codeLabel}、9999 は全桁数を表す指定です。`,
+      `FB は削除コマンド、${suppressCount} は削除キャラクタ数、${targetHex} は削除対象の ${targetLabel} です。`,
       "F100 は削除完了後に全てのデータを送信する指定です。",
     ],
   };
@@ -754,11 +788,11 @@ function buildDeleteThenRangeCommand(query) {
 
   if (!rangeMatch || !mentionsDelete || !/(出力|送信|表示|取り出|切り出|ください)/.test(normalizedQuery)) return null;
 
-  const targetChar = findDeleteTargetCharacter(query);
+  const targetChars = findDeleteTargetCharacters(query);
   const startPosition = Number(rangeMatch[1]);
   const characterCount = Number(rangeMatch[2]);
   if (
-    !targetChar ||
+    targetChars.length === 0 ||
     !Number.isInteger(startPosition) ||
     !Number.isInteger(characterCount) ||
     startPosition < 1 ||
@@ -772,7 +806,9 @@ function buildDeleteThenRangeCommand(query) {
   const symbology = getSymbologyTarget(normalizedQuery);
   const readLengthMatch = normalizedQuery.match(/(\d{1,4})\s*桁\s*(?:読み取り|読取|バーコード|コード)/);
   const readLength = readLengthMatch ? Number(readLengthMatch[1]) : null;
-  const targetHex = targetChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const targetHex = targetChars.map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
+  const suppressCount = targetChars.length.toString().padStart(2, "0");
+  const targetLabel = targetChars.map(describeReplaceCharacter).join("と");
   const cursorMove = startPosition - 1;
   const cursorHex = cursorMove.toString().padStart(2, "0");
   const countHex = characterCount.toString().padStart(2, "0");
@@ -786,14 +822,14 @@ function buildDeleteThenRangeCommand(query) {
 
   return {
     id: `df-generated-delete-${targetHex}-${codeId}-${lengthField}-from-${cursorHex}-count-${countHex}`,
-    label: `${describeReplaceCharacter(targetChar)}削除後 ${startPosition}桁目から${characterCount}桁を出力`,
+    label: `${targetLabel}削除後 ${startPosition}桁目から${characterCount}桁を出力`,
     category: "登録例",
-    summary: `${codeLabel}・${lengthLabel}を対象に、${describeReplaceCharacter(targetChar)}を削除してから${startPosition}桁目から${characterCount}桁のみを出力します。`,
+    summary: `${codeLabel}・${lengthLabel}を対象に、${targetLabel}を削除してから${startPosition}桁目から${characterCount}桁のみを出力します。`,
     keywords: [],
-    command: `DFMBK30099${codeId}${lengthField}FB01${targetHex}F7F5${cursorHex}F2${countHex}00.`,
+    command: `DFMBK30099${codeId}${lengthField}FB${suppressCount}${targetHex}F7F5${cursorHex}F2${countHex}00.`,
     notes: [
       `${codeId} は${codeLabel}を表す指定です。${lengthNote}`,
-      `FB01${targetHex} は ${describeReplaceCharacter(targetChar)} を削除する指定です。`,
+      `FB${suppressCount}${targetHex} は ${targetLabel} を削除する指定です。`,
       "F7 は削除後にカーソルを先頭へ戻す指定です。",
       `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F2${countHex}00 でそこから${characterCount}桁を送信します。`,
     ],
