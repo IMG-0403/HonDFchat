@@ -70,6 +70,7 @@ window.HON_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 - 自動生成: 任意の1文字を削除後、カーソルを先頭に戻して指定範囲を出力
 - 応用例: 全コード種・全桁数で先頭に Ctrl+Shift+F5 を付加
 - 応用例: 全コード種・全桁数で末尾に CTRL を付加
+- 自動生成: コード種指定・桁数指定ありの末尾 CTRL 付加
 - 応用例: Code39データ入力の1秒経過後にF4を付加
 - 応用例: Code39データ入力の2秒経過後にF4を付加
 - 応用例: Code39データ入力の3秒経過後にF3を付加
@@ -80,6 +81,7 @@ window.HON_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 - キャラクター Hex/ASCII表: SPACE `20` から `~` `7E` まで
 - EFディレイ表: `EF0100` = 0.5秒 から `EF0600` = 3秒まで
 - B5キーマップ表: A-Z、F1-F12のキーストローク番号
+- B5修飾キー ss 表: SHIFT/ALT/CTRLの左右指定と組み合わせ
 - コード種ID表: QR Code `73`、Code128 `6A`、Code39 `62`、Data Matrix `77` など
 - Data Format Editor コマンド表: F1/F2/F5/F7/E4/FB に加え、F3/B9/E9/F4/BA/F8/F9/B0/B1/E6/E7/FE/B2/EC/ED/EF など
 

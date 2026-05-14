@@ -406,6 +406,24 @@ const efDelayTable = [
   { command: "EF0600", delay: "3秒", aliases: ["3秒", "3 秒", "3000ms"] },
 ];
 
+const b5ModifierTable = [
+  { label: "なし", hex: "00", aliases: ["なし", "修飾なし", "shift alt ctrlなし", "shift、alt、ctrlなし"] },
+  { label: "左SHIFT", hex: "01", aliases: ["左shift", "left shift", "shift"] },
+  { label: "右SHIFT", hex: "02", aliases: ["右shift", "right shift"] },
+  { label: "左ALT", hex: "04", aliases: ["左alt", "left alt", "alt"] },
+  { label: "右ALT", hex: "08", aliases: ["右alt", "right alt"] },
+  { label: "左CTRL", hex: "10", aliases: ["左ctrl", "left ctrl", "ctrl", "control", "コントロール"] },
+  { label: "右CTRL", hex: "20", aliases: ["右ctrl", "right ctrl"] },
+  { label: "左CTRL + 左SHIFT", hex: "11", aliases: ["左ctrl 左shift", "ctrl shift", "control shift", "ctrl+shift"] },
+  { label: "左CTRL + 右SHIFT", hex: "12", aliases: ["左ctrl 右shift", "ctrl 右shift"] },
+  { label: "左CTRL + 左ALT", hex: "14", aliases: ["左ctrl 左alt", "ctrl alt", "control alt", "ctrl+alt"] },
+  { label: "左CTRL + 右ALT", hex: "18", aliases: ["左ctrl 右alt", "ctrl 右alt"] },
+  { label: "右CTRL + 左SHIFT", hex: "21", aliases: ["右ctrl 左shift"] },
+  { label: "右CTRL + 右SHIFT", hex: "22", aliases: ["右ctrl 右shift"] },
+  { label: "右CTRL + 左ALT", hex: "24", aliases: ["右ctrl 左alt"] },
+  { label: "右CTRL + 右ALT", hex: "28", aliases: ["右ctrl 右alt"] },
+];
+
 const symbologyCodeTable = [
   { codeId: "99", label: "全コード種", aliases: ["all symbologies", "全シンボル", "全コード", "全コード種", "全バーコード", "全バーコード種", "全てのバーコード種", "すべてのバーコード種"] },
   { codeId: "61", label: "Codabar/NW-7", aliases: ["codabar", "コーダバー", "nw-7", "nw7"] },
@@ -904,7 +922,20 @@ function findExactDeleteCharacterCommand(query) {
   };
 }
 
-function findExactSuffixCtrlCommand(query) {
+function getReadLengthsForSuffixCtrl(normalizedQuery) {
+  const structuredLengths = getReadLengths(normalizedQuery);
+  if (structuredLengths.length > 0) return structuredLengths;
+
+  const mentionsLength = ["桁数指定", "桁指定", "桁読み取り", "桁読取"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  );
+  if (!mentionsLength) return [];
+
+  const matches = [...normalizedQuery.matchAll(/(\d{1,4})\s*桁/g)];
+  return [...new Set(matches.map((match) => Number(match[1])).filter((length) => Number.isInteger(length) && length >= 0 && length <= 9999))];
+}
+
+function buildSuffixCtrlCommand(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsCtrl = ["ctrl", "control", "コントロール"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsSuffix = ["末尾", "後ろ", "最後"].some((word) => normalizedQuery.includes(normalizeText(word)));
@@ -912,7 +943,29 @@ function findExactSuffixCtrlCommand(query) {
 
   if (!mentionsCtrl || !mentionsSuffix || !mentionsAppend) return null;
 
-  return commandCatalog.find((item) => item.id === "df-example-suffix-ctrl") || null;
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengthsForSuffixCtrl(normalizedQuery);
+  const editorCommand = "F100B5012040";
+  const codeLabel = symbologyTargets.map((item) => item.label).join("、");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-suffix-ctrl-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
+    label: `${codeLabel}・${lengthLabel} 末尾にCTRLを付加`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、読み取りデータを出力して末尾にCTRLキーを付加します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    notes: [
+      `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は ${item.label}`).join("、")} を表す指定です。`,
+      lengthNote,
+      "F100 は読み取りデータを全て出力し、B5012040 は末尾に CTRL キーを付加する指定です。",
+      "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。",
+    ],
+  };
 }
 
 function findDelayCommand(query) {
@@ -940,6 +993,32 @@ function findB5KeyForAppend(query) {
   return null;
 }
 
+function getB5ModifierForAppend(query) {
+  const normalizedQuery = normalizeText(query);
+  const hasLeftCtrl = normalizedQuery.includes("左ctrl") || normalizedQuery.includes("left ctrl");
+  const hasRightCtrl = normalizedQuery.includes("右ctrl") || normalizedQuery.includes("right ctrl");
+  const hasLeftShift = normalizedQuery.includes("左shift") || normalizedQuery.includes("left shift");
+  const hasRightShift = normalizedQuery.includes("右shift") || normalizedQuery.includes("right shift");
+  const hasLeftAlt = normalizedQuery.includes("左alt") || normalizedQuery.includes("left alt");
+  const hasRightAlt = normalizedQuery.includes("右alt") || normalizedQuery.includes("right alt");
+  const hasCtrl = hasLeftCtrl || hasRightCtrl || ["ctrl", "control", "コントロール"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const hasShift = hasLeftShift || hasRightShift || normalizedQuery.includes("shift");
+  const hasAlt = hasLeftAlt || hasRightAlt || normalizedQuery.includes("alt");
+
+  const ctrl = hasRightCtrl ? "right" : hasCtrl ? "left" : "";
+  const shift = hasRightShift ? "right" : hasShift ? "left" : "";
+  const alt = hasRightAlt ? "right" : hasAlt ? "left" : "";
+
+  if (!ctrl && !shift && !alt) return b5ModifierTable[0];
+  if (ctrl && shift) return b5ModifierTable.find((item) => item.hex === (ctrl === "right" ? (shift === "right" ? "22" : "21") : (shift === "right" ? "12" : "11")));
+  if (ctrl && alt) return b5ModifierTable.find((item) => item.hex === (ctrl === "right" ? (alt === "right" ? "28" : "24") : (alt === "right" ? "18" : "14")));
+  if (ctrl) return b5ModifierTable.find((item) => item.hex === (ctrl === "right" ? "20" : "10"));
+  if (shift) return b5ModifierTable.find((item) => item.hex === (shift === "right" ? "02" : "01"));
+  if (alt) return b5ModifierTable.find((item) => item.hex === (alt === "right" ? "08" : "04"));
+
+  return b5ModifierTable[0];
+}
+
 function buildSymbologyDelayKeyCommand(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsDelayOrAfter = ["経過後", "後", "待機", "ディレイ", "delay"].some((word) => normalizedQuery.includes(normalizeText(word)));
@@ -949,19 +1028,20 @@ function buildSymbologyDelayKeyCommand(query) {
   const symbology = getSymbologyTarget(normalizedQuery);
   const delay = findDelayCommand(query);
   const key = findB5KeyForAppend(query);
+  const modifier = getB5ModifierForAppend(query);
   if (!symbology || !delay || !key) return null;
 
   return {
-    id: `df-generated-${symbology.codeId}-${delay.command}-${key.hex}`,
-    label: `${symbology.label}データ入力の${delay.delay}後に${key.key}を付加`,
+    id: `df-generated-${symbology.codeId}-${delay.command}-${modifier.hex}-${key.hex}`,
+    label: `${symbology.label}データ入力の${delay.delay}後に${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key}を付加`,
     category: "登録例",
     summary: `${symbology.label}を対象に、読み取りデータを出力して${delay.delay}待機した後、${key.key}キーを付加します。`,
     keywords: [],
-    command: `DFMBK30099${symbology.codeId}9999F100${delay.command}B50100${key.hex}.`,
+    command: `DFMBK30099${symbology.codeId}9999F100${delay.command}B501${modifier.hex}${key.hex}.`,
     notes: [
       `0 は Primary Data Format、099 は全端末、${symbology.codeId} は ${symbology.label}、9999 は全桁数を表す指定です。`,
       `F100 は読み取りデータを全て出力し、${delay.command} は ${delay.delay} の待機を挿入する指定です。`,
-      `B50100${key.hex} は ${key.key} キーを付加する指定です。EF/B5 はキーボードウェッジ、USB-HID使用時の応用例です。`,
+      `B501${modifier.hex}${key.hex} は ${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key} キーを付加する指定です。左右指定がない修飾キーは左優先です。EF/B5 はキーボードウェッジ、USB-HID使用時の応用例です。`,
     ],
   };
 
@@ -1071,7 +1151,7 @@ function findCharacters(query) {
 
 function findB5Keys(query) {
   const normalizedQuery = normalizeText(query);
-  const wantsB5 = ["キーマップ", "キーコード", "keyboard", "キーボード"].some((word) =>
+  const wantsB5 = ["キーマップ", "キーコード", "keyboard", "キーボード", "キーストローク"].some((word) =>
     normalizedQuery.includes(normalizeText(word))
   );
 
@@ -1085,6 +1165,24 @@ function findB5Keys(query) {
   });
 
   return matches.length > 0 ? matches : b5KeyMapTable;
+}
+
+function findB5Modifiers(query) {
+  const normalizedQuery = normalizeText(query);
+  const wantsModifier = ["ss", "修飾", "modifier", "shift", "alt", "ctrl", "control"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  ) && ["b5", "キーストローク"].some((word) => normalizedQuery.includes(normalizeText(word)));
+
+  if (!wantsModifier) return [];
+
+  const matches = b5ModifierTable.filter((item) => {
+    const label = normalizeText(item.label);
+    const hex = normalizeText(item.hex);
+    const aliases = (item.aliases || []).map(normalizeText);
+    return normalizedQuery.includes(label) || normalizedQuery.includes(hex) || aliases.some((alias) => normalizedQuery.includes(alias));
+  });
+
+  return matches.length > 0 ? matches : b5ModifierTable;
 }
 
 function findEfDelays(query) {
@@ -1319,6 +1417,29 @@ function b5KeysToHtml(items) {
   `;
 }
 
+function b5ModifiersToHtml(items) {
+  const rows = items
+    .map(
+      (item) => `
+        <div class="function-code-row">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(item.hex)}</span>
+        </div>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="command-card">
+      <div>
+        <div class="command-title">B5修飾キー ss 表</div>
+        <p>B501ssnn の ss に指定する修飾キー値です。左右指定がない場合は左優先です。</p>
+      </div>
+      <div class="function-code-table">${rows}</div>
+    </div>
+  `;
+}
+
 function efDelaysToHtml(items) {
   const rows = items
     .map(
@@ -1494,7 +1615,7 @@ function renderAztecBarcodes(root = document) {
 
 function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
-  const suffixCtrlCommand = findExactSuffixCtrlCommand(question);
+  const suffixCtrlCommand = buildSuffixCtrlCommand(question);
   const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
@@ -1502,6 +1623,7 @@ function answerQuestion(question) {
   const generatedRangeCommand = buildRangeCharactersCommand(question);
   const generatedLeadingCommand = buildLeadingCharactersCommand(question);
   const efDelayMatches = findEfDelays(question);
+  const b5ModifierMatches = findB5Modifiers(question);
   const b5KeyMatches = findB5Keys(question);
   const matches = findMatches(question);
 
@@ -1547,6 +1669,11 @@ function answerQuestion(question) {
 
   if (efDelayMatches.length > 0) {
     addMessage("bot", efDelaysToHtml(efDelayMatches), { html: true });
+    return;
+  }
+
+  if (b5ModifierMatches.length > 0) {
+    addMessage("bot", b5ModifiersToHtml(b5ModifierMatches), { html: true });
     return;
   }
 
