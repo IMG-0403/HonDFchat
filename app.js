@@ -126,6 +126,16 @@ const commandCatalog = [
     notes: ["0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。", "B5011174 は Ctrl+Shift+F5 のキー付加、F100 は残りのデータ出力を表す応用例です。", "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。"],
   },
   {
+    id: "df-example-suffix-ctrl",
+    label: "データ末尾にCTRLを付加",
+    category: "登録例",
+    summary: "全コード種、全桁数を対象に、読み取りデータを出力して末尾にCTRLキーを付加します。",
+    requestText: "データ末尾にCTRL付加する設定",
+    keywords: ["ctrl", "control", "コントロール", "末尾", "後ろ", "付加", "追加", "キー", "b5", "012040", "全コード", "全桁"],
+    command: "DFMBK30099999999F100B5012040.",
+    notes: ["0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。", "F100 は読み取りデータを全て出力し、B5012040 は末尾に CTRL キーを付加する指定です。", "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。"],
+  },
+  {
     id: "df-example-code128-prefix-b21",
     label: "Code128限定で先頭にb21を付加",
     category: "登録例",
@@ -420,8 +430,19 @@ const dataFormatEditorCommandTable = [
 const fallbackText =
   "該当するデータフォーマット設定が見つかりませんでした。\n\n例のように、登録・削除・有効化・エラー音・出力例を含めて質問してください。\n「データフォーマットを表示」「全削除」「Enterを付ける例」「必須一致にしたい」「不一致エラー音を消したい」";
 
-const barcodeUnavailableText =
-  "申し訳ございません。設定バーコードの生成できません。\n恐れ入りますが、ご依頼の設定内容を下記のメールアドレスにご連絡ください。\nMail:infohp@imagers.co.jp";
+const barcodeUnavailableHtml = `
+  <div class="contact-message">
+    <p>申し訳ございません。設定バーコードを生成できません。</p>
+    <p>恐れ入りますが、ご依頼の設定内容を下記のメールアドレスにご連絡ください。</p>
+    <p class="contact-mail">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 6h16v12H4z" />
+        <path d="m4 7 8 6 8-6" />
+      </svg>
+      <span>infohp@imagers.co.jp</span>
+    </p>
+  </div>
+`;
 
 const welcomeText =
   "";
@@ -824,6 +845,17 @@ function findExactDeleteCharacterCommand(query) {
       "F100 は削除完了後に全てのデータを送信する指定です。",
     ],
   };
+}
+
+function findExactSuffixCtrlCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const mentionsCtrl = ["ctrl", "control", "コントロール"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsSuffix = ["末尾", "後ろ", "最後"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = ["付加", "追加", "つける", "付ける"].some((word) => normalizedQuery.includes(normalizeText(word)));
+
+  if (!mentionsCtrl || !mentionsSuffix || !mentionsAppend) return null;
+
+  return commandCatalog.find((item) => item.id === "df-example-suffix-ctrl") || null;
 }
 
 function buildDeleteThenRangeCommand(query) {
@@ -1300,6 +1332,7 @@ function renderAztecBarcodes(root = document) {
 
 function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
+  const suffixCtrlCommand = findExactSuffixCtrlCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
@@ -1314,6 +1347,11 @@ function answerQuestion(question) {
 
   if (deleteThenRangeCommand) {
     addMessage("bot", commandToHtml(deleteThenRangeCommand), { html: true });
+    return;
+  }
+
+  if (suffixCtrlCommand) {
+    addMessage("bot", commandToHtml(suffixCtrlCommand), { html: true });
     return;
   }
 
@@ -1338,12 +1376,12 @@ function answerQuestion(question) {
   }
 
   if (matches.length === 0) {
-    addMessage("bot", barcodeUnavailableText);
+    addMessage("bot", barcodeUnavailableHtml, { html: true });
     return;
   }
 
   if (matches.length > 1) {
-    addMessage("bot", barcodeUnavailableText);
+    addMessage("bot", barcodeUnavailableHtml, { html: true });
     return;
   }
 
