@@ -12,7 +12,7 @@ const commandCatalog = [
     id: "df-show",
     label: "データフォーマット設定内容出力バーコード",
     category: "基本操作",
-    summary: "現在登録されているデータフォーマット設定を表示します。",
+    summary: "現在登録されているデータフォーマット設定内容を出力します。",
     keywords: ["show", "表示", "確認", "現在", "設定確認", "設定内容", "内容出力", "設定内容出力", "一覧", "見る", "読み出し"],
     command: "DFMBK3?.",
     notes: ["PDF 103Pの Show Data Format / Data Format Settings に対応します。", "設定変更前の確認用として使います。"],
@@ -147,7 +147,7 @@ const commandCatalog = [
     id: "df-clear-all",
     label: "データフォーマット全削除バーコード",
     category: "削除",
-    summary: "登録済みのデータフォーマットをすべて削除します。",
+    summary: "登録済みのデータフォーマット設定をすべて削除します。",
     keywords: ["clear all", "全削除", "全部", "すべて", "削除", "消す", "クリア"],
     command: "DFMDF3.",
     notes: ["PDF 103Pの Data Format 初期化に対応します。", "Prefix/Suffix など他章の設定は削除対象ではありません。"],
@@ -775,7 +775,7 @@ function commandToHtml(item) {
       <div>${notes}</div>
       <div class="aztec-card">
         <div>
-          <strong>設定用AZTECバーコード</strong>
+          <strong>設定用バーコード</strong>
           <p>${escapeHtml(settingCommand)}</p>
         </div>
         <canvas
@@ -783,7 +783,7 @@ function commandToHtml(item) {
           width="260"
           height="260"
           data-setting-command="${escapeHtml(settingCommand)}"
-          aria-label="設定用AZTECバーコード"
+          aria-label="設定用バーコード"
         ></canvas>
         <p class="barcode-status">生成中...</p>
       </div>
