@@ -117,6 +117,16 @@ const commandCatalog = [
     notes: ["0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。", "FB は削除コマンド、01 は削除キャラクタ数、20 は削除対象のスペースです。", "F100 は削除完了後に全てのデータを送信する指定です。"],
   },
   {
+    id: "df-example-trim-leading-zeroes",
+    label: "データ先頭の0をすべて削除して出力",
+    category: "登録例",
+    summary: "読み取りデータ先頭の連続する0をスキップし、0以外の文字から末尾までを出力します。",
+    requestText: "データ先頭の複数桁ある0をすべて削除して出力する設定",
+    keywords: ["先頭", "0", "ゼロ", "zero", "複数桁", "すべて削除", "全て削除", "削除", "除去", "e630", "e6", "f100"],
+    command: "DFMBK30099999999E630F100.",
+    notes: ["0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。", "E630 は現在のカーソル位置から 0 以外のキャラクタ手前まで移動する指定です。", "F100 は移動後の位置から末尾までを出力します。例: 0000123 は 123 と出力されます。"],
+  },
+  {
     id: "df-example-prefix-ctrl-shift-f5",
     label: "先頭にCtrl+Shift+F5を付加",
     category: "登録例",
@@ -486,7 +496,7 @@ const dataFormatEditorCommandTable = [
   { code: "F9", title: "後方のキャラクタを検索して移動", description: "現在のカーソル位置より後方にある指定キャラクタを検索し、その手前までカーソルを移動します。", format: "F9xx" },
   { code: "B0", title: "前方の文字列を検索して移動", description: "現在のカーソル位置より前方にある指定文字列を検索し、その手前までカーソルを移動します。", format: "B0nnnns..s" },
   { code: "B1", title: "後方の文字列を検索して移動", description: "現在のカーソル位置より後方にある指定文字列を検索し、その手前までカーソルを移動します。", format: "B1nnnns..s" },
-  { code: "E6", title: "前方の合致しないキャラクタを検索して移動", description: "指定キャラクタと一致しない最初のキャラクタの手前までカーソルを移動します。", format: "E6xx" },
+  { code: "E6", title: "前方の合致しないキャラクタを検索して移動", description: "現在のカーソル位置から、指定したキャラクタ以外のキャラクタ手前までカーソルを移動します。", format: "E6xx" },
   { code: "E7", title: "後方の合致しないキャラクタを検索して移動", description: "後方にある、指定キャラクタと一致しない最初のキャラクタの手前までカーソルを移動します。", format: "E7xx" },
   { code: "F4", title: "文字を繰り返し挿入", description: "現在のカーソル位置に、指定した1文字を指定回数だけ挿入します。カーソル位置は移動しません。", format: "F4xxnn" },
   { code: "BA", title: "文字列を挿入", description: "現在のカーソル位置に、指定した文字列を挿入します。カーソル位置は移動しません。", format: "BAnnnns..s" },
@@ -674,46 +684,60 @@ function buildLeadingCharactersCommand(query) {
 
 function buildRangeCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const match = normalizedQuery.match(/(\d{1,2})\s*桁目\s*から\s*(\d{1,2})\s*桁/);
+  const rangeMatches = [...normalizedQuery.matchAll(/(\d{1,2})\s*桁目\s*から\s*(\d{1,2})\s*桁/g)];
 
-  if (!match || !/(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) return null;
+  if (rangeMatches.length === 0 || !/(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) return null;
 
-  const startPosition = Number(match[1]);
-  const characterCount = Number(match[2]);
-  if (
-    !Number.isInteger(startPosition) ||
-    !Number.isInteger(characterCount) ||
-    startPosition < 1 ||
-    startPosition > 99 ||
-    characterCount < 1 ||
-    characterCount > 99
-  ) {
-    return null;
-  }
+  const ranges = rangeMatches.map((match) => ({
+    startPosition: Number(match[1]),
+    characterCount: Number(match[2]),
+  }));
+
+  if (ranges.some((range) =>
+    !Number.isInteger(range.startPosition) ||
+    !Number.isInteger(range.characterCount) ||
+    range.startPosition < 1 ||
+    range.startPosition > 99 ||
+    range.characterCount < 1 ||
+    range.characterCount > 99
+  )) return null;
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengths = getReadLengths(normalizedQuery);
 
-  const cursorMove = startPosition - 1;
-  const cursorHex = cursorMove.toString().padStart(2, "0");
-  const countHex = characterCount.toString().padStart(2, "0");
+  let cursorPosition = 1;
+  const commandParts = [];
+  const rangeNotes = [];
+  for (const range of ranges) {
+    const cursorMove = range.startPosition - cursorPosition;
+    if (cursorMove < 0 || cursorMove > 99) return null;
+
+    const cursorHex = cursorMove.toString().padStart(2, "0");
+    const countHex = range.characterCount.toString().padStart(2, "0");
+    commandParts.push(`F5${cursorHex}F2${countHex}00`);
+    rangeNotes.push(`${range.startPosition}桁目から${range.characterCount}桁`);
+    cursorPosition = range.startPosition + range.characterCount;
+  }
+
   const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
   const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
   const lengthNote = readLengths.length > 0
     ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
     : "9999 は全桁数を表す指定です。";
-  const editorCommand = `F5${cursorHex}F2${countHex}00`;
+  const editorCommand = commandParts.join("");
+  const rangeLabel = rangeNotes.join("と");
 
   return {
-    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-from-${cursorHex}-count-${countHex}`,
-    label: `${codeLabel}・${lengthLabel} ${startPosition}桁目から${characterCount}桁を出力`,
+    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${commandParts.join("-")}`,
+    label: `${codeLabel}・${lengthLabel} ${rangeLabel}を出力`,
     category: "登録例",
-    summary: `${codeLabel}を対象に、読み取りデータの${startPosition}桁目から${characterCount}桁のみを出力します。`,
+    summary: `${codeLabel}を対象に、読み取りデータの${rangeLabel}を出力します。`,
     keywords: [],
     command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
-      `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F2${countHex}00 でそこから${characterCount}桁を送信します。`,
+      "F2実行後にカーソルが送信した桁数分進むため、2つ目以降のF5は直前の送信後位置からの差分で指定します。",
+      `${editorCommand} は ${rangeLabel} を順番に送信する Data Format Editor コマンドです。`,
     ],
   };
 }
@@ -972,6 +996,18 @@ function buildSuffixB5Command(query) {
       "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。",
     ],
   };
+}
+
+function buildTrimLeadingZeroesCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const mentionsLeading = ["先頭", "頭", "前方"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsZero = ["0", "ゼロ", "zero"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsRemove = ["削除", "除去", "消す", "消して", "取り除"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsOutput = ["出力", "送信", "表示"].some((word) => normalizedQuery.includes(normalizeText(word)));
+
+  if (!mentionsLeading || !mentionsZero || !mentionsRemove || !mentionsOutput) return null;
+
+  return commandCatalog.find((item) => item.id === "df-example-trim-leading-zeroes") || null;
 }
 
 function findDelayCommand(query) {
@@ -1621,6 +1657,7 @@ function renderAztecBarcodes(root = document) {
 
 function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
+  const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
   const suffixB5Command = buildSuffixB5Command(question);
   const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
@@ -1635,6 +1672,11 @@ function answerQuestion(question) {
 
   if (replaceThenRangeCommand) {
     addMessage("bot", commandToHtml(replaceThenRangeCommand), { html: true });
+    return;
+  }
+
+  if (trimLeadingZeroesCommand) {
+    addMessage("bot", commandToHtml(trimLeadingZeroesCommand), { html: true });
     return;
   }
 
