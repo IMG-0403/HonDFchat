@@ -742,6 +742,40 @@ function buildRangeCharactersCommand(query) {
   };
 }
 
+function buildFromPositionToEndCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const match = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から(?:末尾|最後|全部|すべて|全て)?)/);
+
+  if (!match || !/(出力|送信|表示|取り出|切り出)/.test(normalizedQuery)) return null;
+
+  const startPosition = Number(match[1]);
+  if (!Number.isInteger(startPosition) || startPosition < 1 || startPosition > 99) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const cursorMove = startPosition - 1;
+  const cursorHex = cursorMove.toString().padStart(2, "0");
+  const editorCommand = `F5${cursorHex}F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-from-${cursorHex}-to-end`,
+    label: `${codeLabel}・${lengthLabel} ${startPosition}桁目以降を出力`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、読み取りデータの${startPosition}桁目以降を出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F100 でそこから末尾まで送信します。`,
+    ],
+  };
+}
+
 function findExactTransformCommand(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsGs = ["gs", "gsコード", "gsキャラクター", "group separator", "グループセパレータ"].some((word) =>
@@ -1387,6 +1421,36 @@ function commandToHtml(item) {
   `;
 }
 
+function shouldClearSettingsBeforeCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  return [
+    "設定削除してから",
+    "設定削除して",
+    "設定を削除してから",
+    "設定を削除して",
+    "設定消去してから",
+    "設定消去して",
+    "設定を消去してから",
+    "設定を消去して",
+  ].some((word) => normalizedQuery.includes(normalizeText(word)));
+}
+
+function applyClearSettingsPrefix(item, shouldPrefix) {
+  if (!shouldPrefix) return item;
+
+  const command = normalizeSettingCommand(item.command);
+  if (command.startsWith("DFMDF3;") || command.startsWith("DFMDF3.")) return item;
+
+  return {
+    ...item,
+    command: `DFMDF3;${command}`,
+    notes: [
+      "DFMDF3; を先頭に付加して、現在登録されているデータフォーマット設定を削除してから新しい設定を登録します。",
+      ...(item.notes || []),
+    ],
+  };
+}
+
 function functionCodesToHtml(items) {
   const rows = items
     .map((item) => {
@@ -1656,6 +1720,8 @@ function renderAztecBarcodes(root = document) {
 }
 
 function answerQuestion(question) {
+  const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
+  const commandHtml = (item) => commandToHtml(applyClearSettingsPrefix(item, shouldClearSettings));
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
   const suffixB5Command = buildSuffixB5Command(question);
@@ -1663,6 +1729,7 @@ function answerQuestion(question) {
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
+  const fromPositionToEndCommand = buildFromPositionToEndCommand(question);
   const generatedRangeCommand = buildRangeCharactersCommand(question);
   const generatedLeadingCommand = buildLeadingCharactersCommand(question);
   const efDelayMatches = findEfDelays(question);
@@ -1671,47 +1738,52 @@ function answerQuestion(question) {
   const matches = findMatches(question);
 
   if (replaceThenRangeCommand) {
-    addMessage("bot", commandToHtml(replaceThenRangeCommand), { html: true });
+    addMessage("bot", commandHtml(replaceThenRangeCommand), { html: true });
     return;
   }
 
   if (trimLeadingZeroesCommand) {
-    addMessage("bot", commandToHtml(trimLeadingZeroesCommand), { html: true });
+    addMessage("bot", commandHtml(trimLeadingZeroesCommand), { html: true });
     return;
   }
 
   if (deleteThenRangeCommand) {
-    addMessage("bot", commandToHtml(deleteThenRangeCommand), { html: true });
+    addMessage("bot", commandHtml(deleteThenRangeCommand), { html: true });
     return;
   }
 
   if (symbologyDelayKeyCommand) {
-    addMessage("bot", commandToHtml(symbologyDelayKeyCommand), { html: true });
+    addMessage("bot", commandHtml(symbologyDelayKeyCommand), { html: true });
     return;
   }
 
   if (suffixB5Command) {
-    addMessage("bot", commandToHtml(suffixB5Command), { html: true });
+    addMessage("bot", commandHtml(suffixB5Command), { html: true });
     return;
   }
 
   if (exactTransformCommand) {
-    addMessage("bot", commandToHtml(exactTransformCommand), { html: true });
+    addMessage("bot", commandHtml(exactTransformCommand), { html: true });
     return;
   }
 
   if (exactDeleteCommand) {
-    addMessage("bot", commandToHtml(exactDeleteCommand), { html: true });
+    addMessage("bot", commandHtml(exactDeleteCommand), { html: true });
+    return;
+  }
+
+  if (fromPositionToEndCommand) {
+    addMessage("bot", commandHtml(fromPositionToEndCommand), { html: true });
     return;
   }
 
   if (generatedRangeCommand) {
-    addMessage("bot", commandToHtml(generatedRangeCommand), { html: true });
+    addMessage("bot", commandHtml(generatedRangeCommand), { html: true });
     return;
   }
 
   if (generatedLeadingCommand) {
-    addMessage("bot", commandToHtml(generatedLeadingCommand), { html: true });
+    addMessage("bot", commandHtml(generatedLeadingCommand), { html: true });
     return;
   }
 
@@ -1740,7 +1812,7 @@ function answerQuestion(question) {
     return;
   }
 
-  addMessage("bot", matches.map(commandToHtml).join(""), { html: true });
+  addMessage("bot", matches.map(commandHtml).join(""), { html: true });
 }
 
 function submitQuestion(question) {
