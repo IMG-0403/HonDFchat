@@ -146,6 +146,26 @@ const commandCatalog = [
     notes: ["0 は Primary Data Format、099 は全端末、62 は Code39、9999 は全桁数を表す指定です。", "F100 は読み取りデータを全て出力し、EF0400 は5ms単位で400回、つまり2秒の待機を挿入する指定です。", "B5010073 は F4 キーを付加する指定です。EF/B5 はキーボードウェッジ、USB-HID使用時の応用例です。"],
   },
   {
+    id: "df-example-code39-delay-1s-f4",
+    label: "Code39データ入力の1秒後にF4を付加",
+    category: "登録例",
+    summary: "Code39を対象に、読み取りデータを出力して1秒待機した後、F4キーを付加します。",
+    requestText: "Code39データ入力の1秒経過後にF4を付加",
+    keywords: ["code39", "code 39", "コード39", "1秒", "1 秒", "経過後", "待機", "ディレイ", "delay", "f4", "付加", "追加", "キー", "ef0200", "b5010073"],
+    command: "DFMBK30099629999F100EF0200B5010073.",
+    notes: ["0 は Primary Data Format、099 は全端末、62 は Code39、9999 は全桁数を表す指定です。", "F100 は読み取りデータを全て出力し、EF0200 は5ms単位で200回、つまり1秒の待機を挿入する指定です。", "B5010073 は F4 キーを付加する指定です。EF/B5 はキーボードウェッジ、USB-HID使用時の応用例です。"],
+  },
+  {
+    id: "df-example-code39-delay-3s-f3",
+    label: "Code39データ入力の3秒後にF3を付加",
+    category: "登録例",
+    summary: "Code39を対象に、読み取りデータを出力して3秒待機した後、F3キーを付加します。",
+    requestText: "Code39データ入力の3秒経過後にF3を付加",
+    keywords: ["code39", "code 39", "コード39", "3秒", "3 秒", "経過後", "待機", "ディレイ", "delay", "f3", "付加", "追加", "キー", "ef0600", "b5010072"],
+    command: "DFMBK30099629999F100EF0600B5010072.",
+    notes: ["0 は Primary Data Format、099 は全端末、62 は Code39、9999 は全桁数を表す指定です。", "F100 は読み取りデータを全て出力し、EF0600 は5ms単位で600回、つまり3秒の待機を挿入する指定です。", "B5010072 は F3 キーを付加する指定です。EF/B5 はキーボードウェッジ、USB-HID使用時の応用例です。"],
+  },
+  {
     id: "df-example-code128-prefix-b21",
     label: "Code128限定で先頭にb21を付加",
     category: "登録例",
@@ -327,14 +347,29 @@ const characterHexTable = [
 ];
 
 const b5KeyMapTable = [
-  { key: "Ctrl", hex: "01", aliases: ["control", "コントロール", "ctrl"] },
-  { key: "Shift", hex: "11", aliases: ["シフト", "shift"] },
-  { key: "Alt", hex: "19", aliases: ["オルト", "alt"] },
-  { key: "Enter", hex: "0D", aliases: ["return", "改行", "エンター"] },
-  { key: "Tab", hex: "09", aliases: ["タブ"] },
-  { key: "Esc", hex: "1B", aliases: ["escape", "エスケープ"] },
-  { key: "Backspace", hex: "08", aliases: ["bs", "バックスペース"] },
-  { key: "Space", hex: "3D", aliases: ["スペース", "space"] },
+  { key: "A", hex: "1F", aliases: ["a", "アルファベットA"] },
+  { key: "B", hex: "31", aliases: ["b", "アルファベットB"] },
+  { key: "C", hex: "2F", aliases: ["c", "アルファベットC"] },
+  { key: "D", hex: "21", aliases: ["d", "アルファベットD"] },
+  { key: "E", hex: "13", aliases: ["e", "アルファベットE"] },
+  { key: "F", hex: "22", aliases: ["f", "アルファベットF"] },
+  { key: "G", hex: "23", aliases: ["g", "アルファベットG"] },
+  { key: "H", hex: "24", aliases: ["h", "アルファベットH"] },
+  { key: "I", hex: "18", aliases: ["i", "アルファベットI"] },
+  { key: "J", hex: "25", aliases: ["j", "アルファベットJ"] },
+  { key: "K", hex: "26", aliases: ["k", "アルファベットK"] },
+  { key: "O", hex: "19", aliases: ["o", "アルファベットO"] },
+  { key: "P", hex: "1A", aliases: ["p", "アルファベットP"] },
+  { key: "Q", hex: "11", aliases: ["q", "アルファベットQ"] },
+  { key: "R", hex: "14", aliases: ["r", "アルファベットR"] },
+  { key: "S", hex: "20", aliases: ["s", "アルファベットS"] },
+  { key: "T", hex: "15", aliases: ["t", "アルファベットT"] },
+  { key: "U", hex: "17", aliases: ["u", "アルファベットU"] },
+  { key: "V", hex: "30", aliases: ["v", "アルファベットV"] },
+  { key: "W", hex: "12", aliases: ["w", "アルファベットW"] },
+  { key: "X", hex: "2E", aliases: ["x", "アルファベットX"] },
+  { key: "Y", hex: "16", aliases: ["y", "アルファベットY"] },
+  { key: "Z", hex: "2D", aliases: ["z", "アルファベットZ"] },
   { key: "F1", hex: "70", aliases: ["ファンクション1"] },
   { key: "F2", hex: "71", aliases: ["ファンクション2"] },
   { key: "F3", hex: "72", aliases: ["ファンクション3"] },
@@ -347,16 +382,15 @@ const b5KeyMapTable = [
   { key: "F10", hex: "79", aliases: ["ファンクション10"] },
   { key: "F11", hex: "7A", aliases: ["ファンクション11"] },
   { key: "F12", hex: "7B", aliases: ["ファンクション12"] },
-  { key: "Insert", hex: "2D", aliases: ["ins", "挿入"] },
-  { key: "Delete", hex: "2E", aliases: ["del", "削除"] },
-  { key: "Home", hex: "24", aliases: ["ホーム"] },
-  { key: "End", hex: "23", aliases: ["エンド"] },
-  { key: "PageUp", hex: "21", aliases: ["page up", "pgup", "ページアップ"] },
-  { key: "PageDown", hex: "22", aliases: ["page down", "pgdn", "ページダウン"] },
-  { key: "ArrowLeft", hex: "25", aliases: ["left", "左", "左矢印"] },
-  { key: "ArrowUp", hex: "26", aliases: ["up", "上", "上矢印"] },
-  { key: "ArrowRight", hex: "27", aliases: ["right", "右", "右矢印"] },
-  { key: "ArrowDown", hex: "28", aliases: ["down", "下", "下矢印"] },
+];
+
+const efDelayTable = [
+  { command: "EF0100", delay: "0.5秒", aliases: ["0.5秒", "0.5 秒", "500ms"] },
+  { command: "EF0200", delay: "1秒", aliases: ["1秒", "1 秒", "1000ms"] },
+  { command: "EF0300", delay: "1.5秒", aliases: ["1.5秒", "1.5 秒", "1500ms"] },
+  { command: "EF0400", delay: "2秒", aliases: ["2秒", "2 秒", "2000ms"] },
+  { command: "EF0500", delay: "2.5秒", aliases: ["2.5秒", "2.5 秒", "2500ms"] },
+  { command: "EF0600", delay: "3秒", aliases: ["3秒", "3 秒", "3000ms"] },
 ];
 
 const symbologyCodeTable = [
@@ -868,17 +902,32 @@ function findExactSuffixCtrlCommand(query) {
   return commandCatalog.find((item) => item.id === "df-example-suffix-ctrl") || null;
 }
 
-function findExactCode39DelayF4Command(query) {
+function findExactCode39DelayKeyCommand(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsCode39 = ["code39", "code 39", "コード39"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsOneSecond = ["1秒", "1 秒", "1sec", "1 sec", "1000ms"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsTwoSeconds = ["2秒", "2 秒", "2sec", "2 sec", "2000ms"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsThreeSeconds = ["3秒", "3 秒", "3sec", "3 sec", "3000ms"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsF3 = normalizedQuery.includes("f3");
   const mentionsF4 = normalizedQuery.includes("f4");
   const mentionsDelayOrAfter = ["経過後", "後", "待機", "ディレイ", "delay"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsAppend = ["付加", "追加", "つける", "付ける"].some((word) => normalizedQuery.includes(normalizeText(word)));
 
-  if (!mentionsCode39 || !mentionsTwoSeconds || !mentionsF4 || !mentionsDelayOrAfter || !mentionsAppend) return null;
+  if (!mentionsCode39 || (!mentionsF3 && !mentionsF4) || !mentionsDelayOrAfter || !mentionsAppend) return null;
 
-  return commandCatalog.find((item) => item.id === "df-example-code39-delay-f4") || null;
+  if (mentionsThreeSeconds && mentionsF3) {
+    return commandCatalog.find((item) => item.id === "df-example-code39-delay-3s-f3") || null;
+  }
+
+  if (mentionsOneSecond && mentionsF4) {
+    return commandCatalog.find((item) => item.id === "df-example-code39-delay-1s-f4") || null;
+  }
+
+  if (mentionsTwoSeconds && mentionsF4) {
+    return commandCatalog.find((item) => item.id === "df-example-code39-delay-f4") || null;
+  }
+
+  return null;
 }
 
 function buildDeleteThenRangeCommand(query) {
@@ -999,6 +1048,24 @@ function findB5Keys(query) {
   });
 
   return matches.length > 0 ? matches : b5KeyMapTable;
+}
+
+function findEfDelays(query) {
+  const normalizedQuery = normalizeText(query);
+  const wantsEf = ["ef", "ディレイ", "delay", "待機", "経過", "秒"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  );
+
+  if (!wantsEf) return [];
+
+  const matches = efDelayTable.filter((item) => {
+    const command = normalizeText(item.command);
+    const delay = normalizeText(item.delay);
+    const aliases = (item.aliases || []).map(normalizeText);
+    return normalizedQuery.includes(command) || normalizedQuery.includes(delay) || aliases.some((alias) => normalizedQuery.includes(alias));
+  });
+
+  return matches.length > 0 ? matches : efDelayTable;
 }
 
 function findDataFormatEditorCommands(query) {
@@ -1207,8 +1274,31 @@ function b5KeysToHtml(items) {
     <div class="command-card">
       <div>
         <div class="command-title">B5キーマップ</div>
-        <p>B5コマンドでキー付加する時のヨーロッパスタイルキーボード用コードです。</p>
+        <p>B5コマンドでキー付加する時のキーストローク番号です。</p>
         <p>B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。</p>
+      </div>
+      <div class="function-code-table">${rows}</div>
+    </div>
+  `;
+}
+
+function efDelaysToHtml(items) {
+  const rows = items
+    .map(
+      (item) => `
+        <div class="function-code-row">
+          <strong>${escapeHtml(item.command)}</strong>
+          <span>${escapeHtml(item.delay)}</span>
+        </div>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="command-card">
+      <div>
+        <div class="command-title">EFディレイ表</div>
+        <p>EFコマンドは5ms単位で待機時間を挿入します。</p>
       </div>
       <div class="function-code-table">${rows}</div>
     </div>
@@ -1368,12 +1458,14 @@ function renderAztecBarcodes(root = document) {
 function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const suffixCtrlCommand = findExactSuffixCtrlCommand(question);
-  const code39DelayF4Command = findExactCode39DelayF4Command(question);
+  const code39DelayKeyCommand = findExactCode39DelayKeyCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
   const generatedRangeCommand = buildRangeCharactersCommand(question);
   const generatedLeadingCommand = buildLeadingCharactersCommand(question);
+  const efDelayMatches = findEfDelays(question);
+  const b5KeyMatches = findB5Keys(question);
   const matches = findMatches(question);
 
   if (replaceThenRangeCommand) {
@@ -1386,8 +1478,8 @@ function answerQuestion(question) {
     return;
   }
 
-  if (code39DelayF4Command) {
-    addMessage("bot", commandToHtml(code39DelayF4Command), { html: true });
+  if (code39DelayKeyCommand) {
+    addMessage("bot", commandToHtml(code39DelayKeyCommand), { html: true });
     return;
   }
 
@@ -1413,6 +1505,16 @@ function answerQuestion(question) {
 
   if (generatedLeadingCommand) {
     addMessage("bot", commandToHtml(generatedLeadingCommand), { html: true });
+    return;
+  }
+
+  if (efDelayMatches.length > 0) {
+    addMessage("bot", efDelaysToHtml(efDelayMatches), { html: true });
+    return;
+  }
+
+  if (b5KeyMatches.length > 0) {
+    addMessage("bot", b5KeysToHtml(b5KeyMatches), { html: true });
     return;
   }
 
