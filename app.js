@@ -1052,11 +1052,11 @@ function findB5Keys(query) {
 
 function findEfDelays(query) {
   const normalizedQuery = normalizeText(query);
-  const wantsEf = ["ef", "ディレイ", "delay", "待機", "経過", "秒"].some((word) =>
+  const asksForEfReference = ["ef", "ディレイ表", "delay table", "待機時間", "換算", "一覧", "表", "何秒"].some((word) =>
     normalizedQuery.includes(normalizeText(word))
   );
 
-  if (!wantsEf) return [];
+  if (!asksForEfReference) return [];
 
   const matches = efDelayTable.filter((item) => {
     const command = normalizeText(item.command);
