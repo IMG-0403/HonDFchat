@@ -404,7 +404,7 @@ function getSymbologyTarget(normalizedQuery) {
 
 function buildLeadingCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const match = normalizedQuery.match(/(?:先頭|最初)\s*(\d{1,2})\s*桁/);
+  const match = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,2})\s*桁/);
 
   if (!match || !/(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) return null;
 
