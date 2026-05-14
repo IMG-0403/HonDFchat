@@ -341,14 +341,14 @@ const b5KeyMapTable = [
 
 const symbologyCodeTable = [
   { codeId: "99", label: "全コード種", aliases: ["all symbologies", "全シンボル", "全コード", "全コード種"] },
-  { codeId: "61", label: "Codabar", aliases: ["codabar", "コーダバー"] },
+  { codeId: "61", label: "Codabar/NW-7", aliases: ["codabar", "コーダバー", "nw-7", "nw7"] },
   { codeId: "68", label: "Code 11", aliases: ["code11", "code 11", "コード11"] },
   { codeId: "6A", label: "Code128", aliases: ["code128", "code 128", "コード128"] },
   { codeId: "3C", label: "Code32", aliases: ["code32", "code 32", "コード32", "pharmaceutical", "paraf"] },
   { codeId: "62", label: "Code39", aliases: ["code39", "code 39", "コード39"] },
   { codeId: "54", label: "TLC39", aliases: ["tlc39", "tcif linked code39"] },
   { codeId: "69", label: "Code93", aliases: ["code93", "code 93", "code 93i", "コード93"] },
-  { codeId: "64", label: "EAN-13", aliases: ["ean", "ean13", "ean-13", "bookland"] },
+  { codeId: "64", label: "EAN-13/JAN-13", aliases: ["ean", "ean13", "ean-13", "jan", "jan13", "jan-13", "bookland"] },
   { codeId: "44", label: "EAN-8", aliases: ["ean8", "ean-8"] },
   { codeId: "79", label: "GS1 DataBar", aliases: ["gs1", "gs1 databar", "gs1 composite", "gs1 omnidirectional"] },
   { codeId: "7B", label: "GS1 Limited", aliases: ["gs1 limited"] },
@@ -1012,21 +1012,9 @@ function addMessage(role, content, options = {}) {
 }
 
 function commandToHtml(item) {
-  const notes = item.notes.map((note) => `<p>${escapeHtml(note)}</p>`).join("");
   const settingCommand = normalizeSettingCommand(item.command);
   return `
     <div class="command-card">
-      <div>
-        <div class="command-title">${escapeHtml(item.label)}</div>
-        <p>${escapeHtml(item.summary)}</p>
-      </div>
-      <div class="command-code">
-        <span>${escapeHtml(item.command)}</span>
-        <button class="copy-command" type="button" data-command="${escapeHtml(item.command)}" aria-label="コマンドをコピー" title="コマンドをコピー">
-          ${buildIcon(["M8 8h10v12H8z", "M6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"])}
-        </button>
-      </div>
-      <div>${notes}</div>
       <div class="aztec-card">
         <div>
           <strong>設定用バーコード</strong>
@@ -1222,11 +1210,6 @@ function renderAztecBarcodes(root = document) {
 }
 
 function answerQuestion(question) {
-  const functionCodes = findFunctionCodes(question);
-  const characters = findCharacters(question);
-  const b5Keys = findB5Keys(question);
-  const editorCommands = findDataFormatEditorCommands(question);
-  const symbologyCodes = findSymbologyCodes(question);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
@@ -1235,84 +1218,47 @@ function answerQuestion(question) {
   const generatedLeadingCommand = buildLeadingCharactersCommand(question);
   const matches = findMatches(question);
 
-  if (functionCodes.length > 0) {
-    const lead = "<p>ファンクションコードの16進値はこちらです。</p>";
-    addMessage("bot", lead + functionCodesToHtml(functionCodes), { html: true });
-    return;
-  }
-
-  if (characters.length > 0) {
-    const lead = "<p>キャラクターの16進値はこちらです。</p>";
-    addMessage("bot", lead + charactersToHtml(characters), { html: true });
-    return;
-  }
-
-  if (b5Keys.length > 0) {
-    const lead = "<p>B5コマンド用のキーコードはこちらです。</p>";
-    addMessage("bot", lead + b5KeysToHtml(b5Keys), { html: true });
-    return;
-  }
-
-  if (editorCommands.length > 0) {
-    const lead = "<p>Data Format Editor コマンドはこちらです。</p>";
-    addMessage("bot", lead + dataFormatEditorCommandsToHtml(editorCommands), { html: true });
-    return;
-  }
-
-  if (symbologyCodes.length > 0) {
-    const lead = "<p>コード種IDはこちらです。</p>";
-    addMessage("bot", lead + symbologyCodesToHtml(symbologyCodes), { html: true });
-    return;
-  }
-
   if (replaceThenRangeCommand) {
-    const lead = "<p>この設定コマンドを試してください。</p>";
-    addMessage("bot", lead + commandToHtml(replaceThenRangeCommand), { html: true });
+    addMessage("bot", commandToHtml(replaceThenRangeCommand), { html: true });
     return;
   }
 
   if (deleteThenRangeCommand) {
-    const lead = "<p>この設定コマンドを試してください。</p>";
-    addMessage("bot", lead + commandToHtml(deleteThenRangeCommand), { html: true });
+    addMessage("bot", commandToHtml(deleteThenRangeCommand), { html: true });
     return;
   }
 
   if (exactTransformCommand) {
-    const lead = "<p>この設定コマンドを試してください。</p>";
-    addMessage("bot", lead + commandToHtml(exactTransformCommand), { html: true });
+    addMessage("bot", commandToHtml(exactTransformCommand), { html: true });
     return;
   }
 
   if (exactDeleteCommand) {
-    const lead = "<p>この設定コマンドを試してください。</p>";
-    addMessage("bot", lead + commandToHtml(exactDeleteCommand), { html: true });
+    addMessage("bot", commandToHtml(exactDeleteCommand), { html: true });
     return;
   }
 
   if (generatedRangeCommand) {
-    const lead = "<p>この設定コマンドを試してください。</p>";
-    addMessage("bot", lead + commandToHtml(generatedRangeCommand), { html: true });
+    addMessage("bot", commandToHtml(generatedRangeCommand), { html: true });
     return;
   }
 
   if (generatedLeadingCommand) {
-    const lead = "<p>この設定コマンドを試してください。</p>";
-    addMessage("bot", lead + commandToHtml(generatedLeadingCommand), { html: true });
+    addMessage("bot", commandToHtml(generatedLeadingCommand), { html: true });
     return;
   }
 
   if (matches.length === 0) {
-    addMessage("bot", fallbackText);
+    addMessage("bot", "設定バーコードの生成ができません。");
     return;
   }
 
   if (matches.length > 1) {
-    addMessage("bot", "コマンド不明のため設定バーコードは生成できません。");
+    addMessage("bot", "設定バーコードの生成ができません。");
     return;
   }
 
-  const lead = "<p>この設定コマンドを試してください。</p>";
-  addMessage("bot", lead + matches.map(commandToHtml).join(""), { html: true });
+  addMessage("bot", matches.map(commandToHtml).join(""), { html: true });
 }
 
 function submitQuestion(question) {
@@ -1327,8 +1273,7 @@ function submitQuestion(question) {
 function submitCommandItem(item) {
   addMessage("user", item.label);
   input.value = "";
-  const lead = "<p>この設定コマンドを試してください。</p>";
-  window.setTimeout(() => addMessage("bot", lead + commandToHtml(item), { html: true }), 180);
+  window.setTimeout(() => addMessage("bot", commandToHtml(item), { html: true }), 180);
 }
 
 function openPdf(path) {
