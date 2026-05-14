@@ -136,6 +136,16 @@ const commandCatalog = [
     notes: ["0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。", "F100 は読み取りデータを全て出力し、B5012040 は末尾に CTRL キーを付加する指定です。", "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。"],
   },
   {
+    id: "df-example-code39-delay-f4",
+    label: "Code39データ入力の2秒後にF4を付加",
+    category: "登録例",
+    summary: "Code39を対象に、読み取りデータを出力して2秒待機した後、F4キーを付加します。",
+    requestText: "Code39データ入力の2秒経過後にF4を付加",
+    keywords: ["code39", "code 39", "コード39", "2秒", "2 秒", "経過後", "待機", "ディレイ", "delay", "f4", "付加", "追加", "キー", "ef0400", "b5010073"],
+    command: "DFMBK30099629999F100EF0400B5010073.",
+    notes: ["0 は Primary Data Format、099 は全端末、62 は Code39、9999 は全桁数を表す指定です。", "F100 は読み取りデータを全て出力し、EF0400 は5ms単位で400回、つまり2秒の待機を挿入する指定です。", "B5010073 は F4 キーを付加する指定です。EF/B5 はキーボードウェッジ、USB-HID使用時の応用例です。"],
+  },
+  {
     id: "df-example-code128-prefix-b21",
     label: "Code128限定で先頭にb21を付加",
     category: "登録例",
@@ -858,6 +868,19 @@ function findExactSuffixCtrlCommand(query) {
   return commandCatalog.find((item) => item.id === "df-example-suffix-ctrl") || null;
 }
 
+function findExactCode39DelayF4Command(query) {
+  const normalizedQuery = normalizeText(query);
+  const mentionsCode39 = ["code39", "code 39", "コード39"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsTwoSeconds = ["2秒", "2 秒", "2sec", "2 sec", "2000ms"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsF4 = normalizedQuery.includes("f4");
+  const mentionsDelayOrAfter = ["経過後", "後", "待機", "ディレイ", "delay"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = ["付加", "追加", "つける", "付ける"].some((word) => normalizedQuery.includes(normalizeText(word)));
+
+  if (!mentionsCode39 || !mentionsTwoSeconds || !mentionsF4 || !mentionsDelayOrAfter || !mentionsAppend) return null;
+
+  return commandCatalog.find((item) => item.id === "df-example-code39-delay-f4") || null;
+}
+
 function buildDeleteThenRangeCommand(query) {
   const normalizedQuery = normalizeText(query);
   const rangeMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*から\s*(\d{1,2})\s*桁/);
@@ -1092,7 +1115,7 @@ function commandToHtml(item) {
   const settingCommand = normalizeSettingCommand(item.command);
   return `
     <div class="command-card">
-      <div>
+      <div class="aztec-card">
         <div class="command-title">設定コマンド</div>
         <div class="command-code">
           <span>${escapeHtml(settingCommand)}</span>
@@ -1104,8 +1127,6 @@ function commandToHtml(item) {
             aria-label="コマンドをコピー"
           >${icons.copy}</button>
         </div>
-      </div>
-      <div class="aztec-card">
         <div>
           <strong>設定用バーコード</strong>
         </div>
@@ -1347,6 +1368,7 @@ function renderAztecBarcodes(root = document) {
 function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const suffixCtrlCommand = findExactSuffixCtrlCommand(question);
+  const code39DelayF4Command = findExactCode39DelayF4Command(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
@@ -1361,6 +1383,11 @@ function answerQuestion(question) {
 
   if (deleteThenRangeCommand) {
     addMessage("bot", commandToHtml(deleteThenRangeCommand), { html: true });
+    return;
+  }
+
+  if (code39DelayF4Command) {
+    addMessage("bot", commandToHtml(code39DelayF4Command), { html: true });
     return;
   }
 
