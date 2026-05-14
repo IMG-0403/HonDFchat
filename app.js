@@ -497,12 +497,16 @@ function buildDataFormatCommandFromBlocks(blocks) {
 }
 
 function getReadLengths(normalizedQuery) {
-  const lengthPattern = /(\d{1,4})\s*桁\s*(?:読み取り|読取|バーコード|コード)/g;
+  const lengthPattern = /((?:\d{1,4}\s*桁\s*(?:と|、|,|，|\/|\+|&|and)?\s*)+)\s*(?:読み取り|読取|バーコード|コード)/g;
   const lengths = [];
   let match;
 
   while ((match = lengthPattern.exec(normalizedQuery)) !== null) {
-    lengths.push(Number(match[1]));
+    const lengthText = match[1];
+    const numberMatches = lengthText.matchAll(/(\d{1,4})\s*桁/g);
+    for (const numberMatch of numberMatches) {
+      lengths.push(Number(numberMatch[1]));
+    }
   }
 
   return [...new Set(lengths.filter((length) => Number.isInteger(length) && length >= 0 && length <= 9999))];
