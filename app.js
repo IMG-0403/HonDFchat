@@ -548,6 +548,80 @@ function findExactSpaceTransformCommand(query) {
 
 }
 
+function findReplaceCharacters(query) {
+  const normalizedCaseQuery = query
+    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\s+/g, " ")
+    .trim();
+  const transformMatch = normalizedCaseQuery.match(
+    /([!-~]|スペース|space|空白|スラッシュ|slash)\s*を\s*([!-~]|スペース|space|空白|スラッシュ|slash)\s*(?:に|へ)?\s*(?:置換|置き換え|置き換えて|変換)/i
+  );
+
+  if (!transformMatch) return null;
+
+  const sourceChar = normalizeReplaceCharacter(transformMatch[1]);
+  const targetChar = normalizeReplaceCharacter(transformMatch[2]);
+  if (!sourceChar || !targetChar) return null;
+
+  return { sourceChar, targetChar };
+}
+
+function buildReplaceThenRangeCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const rangeMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*から\s*(\d{1,2})\s*桁/);
+  const mentionsReplace = ["置換", "置き換え", "置き換えて", "変換"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  );
+
+  if (!rangeMatch || !mentionsReplace || !/(出力|送信|表示|取り出|切り出|ください)/.test(normalizedQuery)) return null;
+
+  const replaceChars = findReplaceCharacters(query);
+  const startPosition = Number(rangeMatch[1]);
+  const characterCount = Number(rangeMatch[2]);
+  if (
+    !replaceChars ||
+    !Number.isInteger(startPosition) ||
+    !Number.isInteger(characterCount) ||
+    startPosition < 1 ||
+    startPosition > 99 ||
+    characterCount < 1 ||
+    characterCount > 99
+  ) {
+    return null;
+  }
+
+  const symbology = getSymbologyTarget(normalizedQuery);
+  const readLengthMatch = normalizedQuery.match(/(\d{1,4})\s*桁\s*(?:読み取り|読取|バーコード|コード)/);
+  const readLength = readLengthMatch ? Number(readLengthMatch[1]) : null;
+  const sourceHex = replaceChars.sourceChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const targetHex = replaceChars.targetChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const cursorMove = startPosition - 1;
+  const cursorHex = cursorMove.toString().padStart(2, "0");
+  const countHex = characterCount.toString().padStart(2, "0");
+  const codeId = symbology ? symbology.codeId : "99";
+  const codeLabel = symbology ? symbology.label : "全コード種";
+  const lengthField = readLength ? String(readLength).padStart(4, "0") : "9999";
+  const lengthLabel = readLength ? `${readLength}桁読み取り時` : "全桁数";
+  const lengthNote = readLength
+    ? `${lengthField} は${readLength}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-replace-${sourceHex}-with-${targetHex}-${codeId}-${lengthField}-from-${cursorHex}-count-${countHex}`,
+    label: `${describeReplaceCharacter(replaceChars.sourceChar)}を${describeReplaceCharacter(replaceChars.targetChar)}に置換後 ${startPosition}桁目から${characterCount}桁を出力`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、${describeReplaceCharacter(replaceChars.sourceChar)}を${describeReplaceCharacter(replaceChars.targetChar)}に置き換えてから${startPosition}桁目から${characterCount}桁のみを出力します。`,
+    keywords: [],
+    command: `DFMBK30099${codeId}${lengthField}E402${sourceHex}${targetHex}F7F5${cursorHex}F2${countHex}00.`,
+    notes: [
+      `${codeId} は${codeLabel}を表す指定です。${lengthNote}`,
+      `E402${sourceHex}${targetHex} は ${describeReplaceCharacter(replaceChars.sourceChar)} を ${describeReplaceCharacter(replaceChars.targetChar)} に置換する指定です。`,
+      "F7 は置換後にカーソルを先頭へ戻す指定です。",
+      `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F2${countHex}00 でそこから${characterCount}桁を送信します。`,
+    ],
+  };
+}
+
 function findDeleteTargetCharacter(query) {
   const normalizedCaseQuery = query
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
@@ -922,6 +996,7 @@ function answerQuestion(question) {
   const functionCodes = findFunctionCodes(question);
   const characters = findCharacters(question);
   const b5Keys = findB5Keys(question);
+  const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
@@ -947,15 +1022,21 @@ function answerQuestion(question) {
     return;
   }
 
-  if (exactTransformCommand) {
+  if (replaceThenRangeCommand) {
     const lead = "<p>この設定コマンドを試してください。</p>";
-    addMessage("bot", lead + commandToHtml(exactTransformCommand), { html: true });
+    addMessage("bot", lead + commandToHtml(replaceThenRangeCommand), { html: true });
     return;
   }
 
   if (deleteThenRangeCommand) {
     const lead = "<p>この設定コマンドを試してください。</p>";
     addMessage("bot", lead + commandToHtml(deleteThenRangeCommand), { html: true });
+    return;
+  }
+
+  if (exactTransformCommand) {
+    const lead = "<p>この設定コマンドを試してください。</p>";
+    addMessage("bot", lead + commandToHtml(exactTransformCommand), { html: true });
     return;
   }
 
