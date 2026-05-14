@@ -1060,6 +1060,7 @@ const icons = {
   edit: buildIcon(["M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z", "M13 6l5 5"]),
   sound: buildIcon(["M4 10v4h4l5 4V6L8 10H4z", "M16 9a4 4 0 0 1 0 6"]),
   scan: buildIcon(["M4 7V5a1 1 0 0 1 1-1h2", "M17 4h2a1 1 0 0 1 1 1v2", "M20 17v2a1 1 0 0 1-1 1h-2", "M7 20H5a1 1 0 0 1-1-1v-2", "M7 12h10"]),
+  copy: buildIcon(["M8 8h10v12H8z", "M6 16H4V4h10v2"]),
 };
 
 function iconForCategory(category) {
@@ -1091,6 +1092,19 @@ function commandToHtml(item) {
   const settingCommand = normalizeSettingCommand(item.command);
   return `
     <div class="command-card">
+      <div>
+        <div class="command-title">設定コマンド</div>
+        <div class="command-code">
+          <span>${escapeHtml(settingCommand)}</span>
+          <button
+            type="button"
+            class="copy-command"
+            data-command="${escapeHtml(settingCommand)}"
+            title="コマンドをコピー"
+            aria-label="コマンドをコピー"
+          >${icons.copy}</button>
+        </div>
+      </div>
       <div class="aztec-card">
         <div>
           <strong>設定用バーコード</strong>
