@@ -420,6 +420,9 @@ const dataFormatEditorCommandTable = [
 const fallbackText =
   "該当するデータフォーマット設定が見つかりませんでした。\n\n例のように、登録・削除・有効化・エラー音・出力例を含めて質問してください。\n「データフォーマットを表示」「全削除」「Enterを付ける例」「必須一致にしたい」「不一致エラー音を消したい」";
 
+const barcodeUnavailableText =
+  "申し訳ございません。設定バーコードの生成できません。\n恐れ入りますが、ご依頼の設定内容を下記のメールアドレスにご連絡ください。\nMail:infohp@imagers.co.jp";
+
 const welcomeText =
   "";
 
@@ -493,6 +496,25 @@ function buildDataFormatCommandFromBlocks(blocks) {
   return blocks.map((block, index) => (index === 0 ? `DFMBK3${block}` : block)).join("|") + ".";
 }
 
+function getReadLengths(normalizedQuery) {
+  const lengthPattern = /(\d{1,4})\s*桁\s*(?:読み取り|読取|バーコード|コード)/g;
+  const lengths = [];
+  let match;
+
+  while ((match = lengthPattern.exec(normalizedQuery)) !== null) {
+    lengths.push(Number(match[1]));
+  }
+
+  return [...new Set(lengths.filter((length) => Number.isInteger(length) && length >= 0 && length <= 9999))];
+}
+
+function buildTargetBlocks(symbologyTargets, readLengths, editorCommand) {
+  const lengthFields = readLengths.length > 0 ? readLengths.map((length) => String(length).padStart(4, "0")) : ["9999"];
+  return symbologyTargets.flatMap((target) =>
+    lengthFields.map((lengthField) => `0099${target.codeId}${lengthField}${editorCommand}`)
+  );
+}
+
 function buildLeadingCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
   const match = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,2})\s*桁/);
@@ -503,25 +525,24 @@ function buildLeadingCharactersCommand(query) {
   if (!Number.isInteger(characterCount) || characterCount < 1 || characterCount > 99) return null;
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
-  const readLengthMatch = normalizedQuery.match(/(\d{1,4})\s*桁\s*(?:読み取り|読取|バーコード|コード)/);
-  const readLength = readLengthMatch ? Number(readLengthMatch[1]) : null;
+  const readLengths = getReadLengths(normalizedQuery);
 
   const countHex = characterCount.toString().padStart(2, "0");
   const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
-  const lengthField = readLength ? String(readLength).padStart(4, "0") : "9999";
-  const labelTarget = readLength ? `${readLength}桁バーコード限定で` : "全桁数で";
-  const summaryTarget = readLength ? `${readLength}桁のバーコードだけを対象に、` : "読取桁数を限定せず、";
-  const lengthNote = readLength
-    ? `${lengthField} は${readLength}桁のバーコードだけを対象にする指定です。`
+  const labelTarget = readLengths.length > 0 ? `${readLengths.join("桁と")}桁バーコード限定で` : "全桁数で";
+  const summaryTarget = readLengths.length > 0 ? `${readLengths.join("桁と")}桁のバーコードだけを対象に、` : "読取桁数を限定せず、";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
     : "9999 は全桁数を表す指定です。";
+  const editorCommand = `F2${countHex}00`;
 
   return {
-    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${lengthField}-first-${countHex}`,
+    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-first-${countHex}`,
     label: `${codeLabel}・${labelTarget}先頭${characterCount}桁を出力`,
     category: "登録例",
     summary: `${codeLabel}を対象に、${summaryTarget}読み取りデータの先頭${characterCount}桁のみを出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(symbologyTargets.map((item) => `0099${item.codeId}${lengthField}F2${countHex}00`)),
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       "複数条件は | で区切り、2件目以降は DFMBK3 を付けずに条件ブロックだけを連結します。",
@@ -549,30 +570,28 @@ function buildRangeCharactersCommand(query) {
     return null;
   }
 
-  const symbology = getSymbologyTarget(normalizedQuery);
-  const readLengthMatch = normalizedQuery.match(/(\d{1,4})\s*桁\s*(?:読み取り|読取|バーコード|コード)/);
-  const readLength = readLengthMatch ? Number(readLengthMatch[1]) : null;
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
 
   const cursorMove = startPosition - 1;
   const cursorHex = cursorMove.toString().padStart(2, "0");
   const countHex = characterCount.toString().padStart(2, "0");
-  const codeId = symbology ? symbology.codeId : "99";
-  const codeLabel = symbology ? symbology.label : "全コード種";
-  const lengthField = readLength ? String(readLength).padStart(4, "0") : "9999";
-  const lengthLabel = readLength ? `${readLength}桁読み取り時` : "全桁数";
-  const lengthNote = readLength
-    ? `${lengthField} は${readLength}桁のバーコードだけを対象にする指定です。`
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
     : "9999 は全桁数を表す指定です。";
+  const editorCommand = `F5${cursorHex}F2${countHex}00`;
 
   return {
-    id: `df-generated-${codeId}-${lengthField}-from-${cursorHex}-count-${countHex}`,
+    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-from-${cursorHex}-count-${countHex}`,
     label: `${codeLabel}・${lengthLabel} ${startPosition}桁目から${characterCount}桁を出力`,
     category: "登録例",
     summary: `${codeLabel}を対象に、読み取りデータの${startPosition}桁目から${characterCount}桁のみを出力します。`,
     keywords: [],
-    command: `DFMBK30099${codeId}${lengthField}F5${cursorHex}F2${countHex}00.`,
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
     notes: [
-      `${codeId} は${codeLabel}を表す指定です。${lengthNote}`,
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F2${countHex}00 でそこから${characterCount}桁を送信します。`,
     ],
   };
@@ -1249,12 +1268,12 @@ function answerQuestion(question) {
   }
 
   if (matches.length === 0) {
-    addMessage("bot", "設定バーコードの生成ができません。");
+    addMessage("bot", barcodeUnavailableText);
     return;
   }
 
   if (matches.length > 1) {
-    addMessage("bot", "設定バーコードの生成ができません。");
+    addMessage("bot", barcodeUnavailableText);
     return;
   }
 
