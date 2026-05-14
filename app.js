@@ -14,7 +14,7 @@ const commandCatalog = [
     category: "基本操作",
     summary: "現在登録されているデータフォーマット設定を表示します。",
     keywords: ["show", "表示", "確認", "現在", "設定確認", "設定内容", "内容出力", "設定内容出力", "一覧", "見る", "読み出し"],
-    command: "DFMBK3?",
+    command: "DFMBK3?.",
     notes: ["PDF 103Pの Show Data Format / Data Format Settings に対応します。", "設定変更前の確認用として使います。"],
   },
   {
