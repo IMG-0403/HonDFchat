@@ -436,6 +436,9 @@ const quickActions = document.querySelector("#quickActions");
 const categoryList = document.querySelector("#categoryList");
 const template = document.querySelector("#messageTemplate");
 const samplePrompt = document.querySelector(".sample-prompt");
+const scannerMark = document.querySelector(".scanner-mark");
+let adminClickCount = 0;
+let adminClickTimer = 0;
 
 function normalizeText(value) {
   return value
@@ -1443,6 +1446,18 @@ clearButton.addEventListener("click", () => {
 
 samplePrompt?.addEventListener("click", () => {
   submitQuestion(samplePrompt.dataset.samplePrompt || "");
+});
+
+scannerMark?.addEventListener("click", () => {
+  window.clearTimeout(adminClickTimer);
+  adminClickCount += 1;
+  if (adminClickCount >= 5) {
+    window.location.href = "admin.html";
+    return;
+  }
+  adminClickTimer = window.setTimeout(() => {
+    adminClickCount = 0;
+  }, 1600);
 });
 
 renderQuickActions();
