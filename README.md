@@ -1,11 +1,36 @@
-# Scanner Command Bot
+# HON DATA FORMAT
 
 スキャナの Data Format 設定内容を質問すると、設定コマンド候補を返す静的 Web アプリです。
 初期データは Honeywell Xenon XP 系マニュアルの Data Format 章、特に PDF 103P 周辺の内容を元にしています。
 
-## 起動方法
+## GitHub Pages + Supabaseで使う方法
 
-`index.html` をブラウザで開いてください。ビルドやインストールは不要です。
+静的ファイルはGitHub Pagesへアップロードします。
+
+```text
+index.html
+styles.css
+app.js
+config.js
+HonASCII.pdf
+HonDataFormat.pdf
+```
+
+設定バーコード生成APIはSupabase Edge Functionsへデプロイします。
+
+```powershell
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+supabase functions deploy barcode --no-verify-jwt
+```
+
+デプロイ後、`config.js` のURLを自分のSupabaseプロジェクトに変更してください。
+
+```js
+window.HON_BARCODE_API_URL = "https://YOUR_PROJECT_REF.supabase.co/functions/v1/barcode";
+```
+
+ローカルPCだけで使う場合は、従来どおり `barcode-server.ps1` を起動して `config.js` のURLを `http://127.0.0.1:8765/barcode` に変更してください。
 
 ## コマンド表の編集
 
@@ -44,26 +69,27 @@
 - ファンクションコード Hex/ASCII表: HT(TAB) `09`、CR `0D`、GS `1D` など
 - キャラクター Hex/ASCII表: SPACE `20` から `~` `7E` まで
 - B5キーマップ表: Ctrl、Shift、F1-F12、矢印キーなど
+- コード種ID表: QR Code `73`、Code128 `6A`、Code39 `62`、Data Matrix `77` など
+- Data Format Editor コマンド表: F1/F2/F5/F7/E4/FB に加え、F3/B9/E9/F4/BA/F8/F9/B0/B1/E6/E7/FE/B2/EC/ED/EF など
 
 ## コマンド表記
 
-Honeywell 系のシリアルメニューコマンドは、送信時に先頭へ `SYN M CR` を付けます。
 末尾の `.` は不揮発メモリへ保存する指定です。
-画面上のコマンド表示では `SYN M CR` は表示せず、`DFMBK...` の設定コマンドだけを表示します。
+画面上のコマンド表示では、`DFMBK...` や `DEFALT.` などの設定コマンドだけを表示します。
 
-## 設定用AZTECバーコード
+## 設定用バーコード
 
-チャットボットがコマンドを回答する時、同時に設定用AZTECバーコードを生成します。
+チャットボットがコマンドを回答する時、同時に設定用バーコードを生成します。
 バーコードに入れるデータは次の形式です。
 
 ```text
-ASCII 22,77,13 + コマンド + .
+コマンド + .
 ```
 
-実データでは `SYN` はASCII 22、`M` はASCII 77、`CR` はASCII 13として付加します。
-AZTEC生成にはブラウザ版 `bwip-js` をCDNから読み込みます。
-EZConfig-Scanning の `AztEn32.dll` と同じ考え方に寄せ、AZTECは `format=full` で生成します。
-制御文字は `^022` のような表示用エスケープではなく、実際の文字コード `0x16` と `0x0D` を直接渡します。
+`DEFALT.` の正しいサンプルに合わせ、先頭の `SYN M CR` は付加しません。
+AZTEC生成には ZXing core を使い、設定バーコードとして認識されるように Reader Initialization のモード情報を付加します。
+Supabase版は `supabase/functions/barcode/index.ts` でTypeScript版ZXingを使います。
+ローカルPowerShell版の `barcode-server.ps1` は、`lib\core-3.4.1.jar` またはローカルのGradleキャッシュから ZXing core を探します。
 
 ## 注意事項
 

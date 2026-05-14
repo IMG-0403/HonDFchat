@@ -339,6 +339,84 @@ const b5KeyMapTable = [
   { key: "ArrowDown", hex: "28", aliases: ["down", "下", "下矢印"] },
 ];
 
+const symbologyCodeTable = [
+  { codeId: "99", label: "全コード種", aliases: ["all symbologies", "全シンボル", "全コード", "全コード種"] },
+  { codeId: "61", label: "Codabar", aliases: ["codabar", "コーダバー"] },
+  { codeId: "68", label: "Code 11", aliases: ["code11", "code 11", "コード11"] },
+  { codeId: "6A", label: "Code128", aliases: ["code128", "code 128", "コード128"] },
+  { codeId: "3C", label: "Code32", aliases: ["code32", "code 32", "コード32", "pharmaceutical", "paraf"] },
+  { codeId: "62", label: "Code39", aliases: ["code39", "code 39", "コード39"] },
+  { codeId: "54", label: "TLC39", aliases: ["tlc39", "tcif linked code39"] },
+  { codeId: "69", label: "Code93", aliases: ["code93", "code 93", "code 93i", "コード93"] },
+  { codeId: "64", label: "EAN-13", aliases: ["ean", "ean13", "ean-13", "bookland"] },
+  { codeId: "44", label: "EAN-8", aliases: ["ean8", "ean-8"] },
+  { codeId: "79", label: "GS1 DataBar", aliases: ["gs1", "gs1 databar", "gs1 composite", "gs1 omnidirectional"] },
+  { codeId: "7B", label: "GS1 Limited", aliases: ["gs1 limited"] },
+  { codeId: "7D", label: "GS1 Expanded", aliases: ["gs1 expanded"] },
+  { codeId: "49", label: "GS1-128", aliases: ["gs1 128", "gs1-128"] },
+  { codeId: "51", label: "China Post", aliases: ["china post", "中国郵便"] },
+  { codeId: "65", label: "Interleaved 2 of 5", aliases: ["interleaved 2 of 5", "itf", "i2of5"] },
+  { codeId: "6D", label: "Matrix 2 of 5", aliases: ["matrix 2 of 5"] },
+  { codeId: "59", label: "NEC 2 of 5", aliases: ["nec 2 of 5"] },
+  { codeId: "66", label: "Straight 2 of 5", aliases: ["straight 2 of 5", "iata", "industrial 2 of 5"] },
+  { codeId: "67", label: "MSI", aliases: ["msi"] },
+  { codeId: "74", label: "Telepen", aliases: ["telepen"] },
+  { codeId: "63", label: "UPC-A", aliases: ["upc", "upc-a", "upca"] },
+  { codeId: "45", label: "UPC-E", aliases: ["upc-e", "upce", "upc-e1"] },
+  { codeId: "7A", label: "Aztec Code", aliases: ["aztec", "aztec code", "アズテック"] },
+  { codeId: "48", label: "Chinese Sensible Code", aliases: ["chinese sensible code", "漢信コード"] },
+  { codeId: "56", label: "Codablock A", aliases: ["codablock a"] },
+  { codeId: "71", label: "Codablock F", aliases: ["codablock f"] },
+  { codeId: "6C", label: "Code49", aliases: ["code49", "code 49"] },
+  { codeId: "77", label: "Data Matrix", aliases: ["data matrix", "datamatrix", "データマトリックス"] },
+  { codeId: "78", label: "MaxiCode", aliases: ["maxicode", "maxi code"] },
+  { codeId: "72", label: "PDF417", aliases: ["pdf417", "pdf 417"] },
+  { codeId: "52", label: "Micro PDF417", aliases: ["micro pdf417", "micro pdf 417"] },
+  { codeId: "73", label: "QRコード", aliases: ["qr", "qrコード", "qr code", "micro qr", "micro qr code"] },
+  { codeId: "4F", label: "OCR", aliases: ["ocr"] },
+  { codeId: "41", label: "Australian Post", aliases: ["australian post"] },
+  { codeId: "42", label: "British Post", aliases: ["british post"] },
+  { codeId: "43", label: "Canadian Post", aliases: ["canadian post"] },
+  { codeId: "2C", label: "InfoMail", aliases: ["infomail"] },
+  { codeId: "4D", label: "Intelligent Mail Bar Code", aliases: ["intelligent mail", "imb"] },
+  { codeId: "4A", label: "Japanese Post", aliases: ["japanese post", "日本郵便"] },
+  { codeId: "4B", label: "KIX Post", aliases: ["kix", "kix post", "netherlands post"] },
+  { codeId: "3F", label: "Korea Post", aliases: ["korea post"] },
+  { codeId: "4C", label: "Planet Code", aliases: ["planet", "planet code"] },
+  { codeId: "4E", label: "Postal-4i", aliases: ["postal-4i", "postal 4i"] },
+  { codeId: "50", label: "Postnet", aliases: ["postnet"] },
+];
+
+const dataFormatEditorCommandTable = [
+  { code: "F1", title: "全データを送信", description: "現在のカーソル位置から末尾までを送信し、最後に指定した1文字を追加します。", format: "F1xx", aliases: ["全送信", "send all"] },
+  { code: "F2", title: "指定桁数を送信", description: "現在のカーソル位置から指定した桁数だけ送信し、最後に指定した1文字を追加します。", format: "F2nnxx", aliases: ["指定桁数", "部分出力"] },
+  { code: "F3", title: "指定文字の手前まで送信", description: "現在のカーソル位置から、指定した文字が出現する手前までを送信し、最後に指定した1文字を追加します。", format: "F3xxxx" },
+  { code: "B9", title: "指定文字列の手前まで送信", description: "現在のカーソル位置から、指定した文字列が出現する手前までを送信します。", format: "B9nnnns..s" },
+  { code: "E9", title: "末尾から指定桁を除いて送信", description: "現在のカーソル位置から末尾までのうち、最後の指定桁数を除いたデータを送信します。実行後、カーソルは入力データの末尾を過ぎた位置へ移動します。", format: "E9nn" },
+  { code: "F5", title: "カーソルを前方へ移動", description: "現在のカーソル位置から指定した桁数分、データの末尾方向へ進めます。", format: "F5nn", aliases: ["前方移動"] },
+  { code: "F6", title: "カーソルを後方へ移動", description: "現在のカーソル位置から指定した桁数分、データの先頭方向へ戻します。", format: "F6nn", aliases: ["後方移動"] },
+  { code: "F7", title: "カーソルを先頭へ移動", description: "カーソルを読み取りデータの先頭へ移動します。", format: "F7", aliases: ["先頭へ戻す"] },
+  { code: "EA", title: "カーソルを末尾へ移動", description: "カーソルを読み取りデータの最終キャラクタの手前へ移動します。", format: "EA" },
+  { code: "F8", title: "前方のキャラクタを検索して移動", description: "現在のカーソル位置より前方にある指定キャラクタを検索し、その手前までカーソルを移動します。", format: "F8xx" },
+  { code: "F9", title: "後方のキャラクタを検索して移動", description: "現在のカーソル位置より後方にある指定キャラクタを検索し、その手前までカーソルを移動します。", format: "F9xx" },
+  { code: "B0", title: "前方の文字列を検索して移動", description: "現在のカーソル位置より前方にある指定文字列を検索し、その手前までカーソルを移動します。", format: "B0nnnns..s" },
+  { code: "B1", title: "後方の文字列を検索して移動", description: "現在のカーソル位置より後方にある指定文字列を検索し、その手前までカーソルを移動します。", format: "B1nnnns..s" },
+  { code: "E6", title: "前方の合致しないキャラクタを検索して移動", description: "指定キャラクタと一致しない最初のキャラクタの手前までカーソルを移動します。", format: "E6xx" },
+  { code: "E7", title: "後方の合致しないキャラクタを検索して移動", description: "後方にある、指定キャラクタと一致しない最初のキャラクタの手前までカーソルを移動します。", format: "E7xx" },
+  { code: "F4", title: "文字を繰り返し挿入", description: "現在のカーソル位置に、指定した1文字を指定回数だけ挿入します。カーソル位置は移動しません。", format: "F4xxnn" },
+  { code: "BA", title: "文字列を挿入", description: "現在のカーソル位置に、指定した文字列を挿入します。カーソル位置は移動しません。", format: "BAnnnns..s" },
+  { code: "B3", title: "シンボル名を挿入", description: "現在のカーソル位置にシンボル名を挿入します。対象はHoneywell IDを持つシンボルです。", format: "B3" },
+  { code: "B4", title: "バーコード長を挿入", description: "現在のカーソル位置に、読み取ったバーコードの桁数を挿入します。", format: "B4" },
+  { code: "B5", title: "キーストロークを挿入", description: "日本語105キー配列からキーを選択し、キーボード入力として挿入します。", format: "B5nn..." },
+  { code: "EF", title: "ディレイを挿入", description: "現在のカーソル位置に、5ms単位の待ち時間を挿入します。キーボードウェッジインターフェースの場合のみ使用できます。", format: "EFnnnn" },
+  { code: "FB", title: "キャラクタを無効にする", description: "カーソル位置はそのままで、最大15種類のキャラクタを無効化します。無効化したキャラクタも桁数としてはカウントされます。", format: "FBnnxxyyzz..." },
+  { code: "E4", title: "キャラクタを置き換える", description: "最大15種類のキャラクタを、カーソルを移動せずに別のキャラクタへ置き換えます。", format: "E4nnxx1xx2yy1yy2..." },
+  { code: "FE", title: "キャラクタを比較して移動", description: "現在のカーソル位置にあるキャラクタを指定キャラクタと比較します。一致した場合はカーソルを1つ進めます。", format: "FExx" },
+  { code: "B2", title: "文字列を比較して移動", description: "現在のカーソル位置にある文字列を指定文字列と比較します。一致した場合はカーソルをその文字列の末尾まで移動します。", format: "B2nnnns..s" },
+  { code: "EC", title: "数字をチェックする", description: "現在のカーソル位置のキャラクタが数字であることを確認します。数字でない場合はフォーマットを中止します。", format: "EC" },
+  { code: "ED", title: "数字以外のキャラクタをチェックする", description: "現在のカーソル位置のキャラクタが数字以外であることを確認します。数字の場合はフォーマットを中止します。", format: "ED" },
+];
+
 const fallbackText =
   "該当するデータフォーマット設定が見つかりませんでした。\n\n例のように、登録・削除・有効化・エラー音・出力例を含めて質問してください。\n「データフォーマットを表示」「全削除」「Enterを付ける例」「必須一致にしたい」「不一致エラー音を消したい」";
 
@@ -390,16 +468,12 @@ function findMatches(query) {
 }
 
 function getSymbologyTarget(normalizedQuery) {
-  if (normalizedQuery.includes("qr") || normalizedQuery.includes("qrコード")) {
-    return { codeId: "73", label: "QRコード" };
-  }
-  if (normalizedQuery.includes("code128") || normalizedQuery.includes("code 128") || normalizedQuery.includes("コード128")) {
-    return { codeId: "6A", label: "Code128" };
-  }
-  if (normalizedQuery.includes("ocr")) {
-    return { codeId: "4F", label: "OCR" };
-  }
-  return null;
+  return symbologyCodeTable.find((item) => {
+    const codeId = normalizeText(item.codeId);
+    const label = normalizeText(item.label);
+    const aliases = (item.aliases || []).map(normalizeText);
+    return normalizedQuery.includes(codeId) || normalizedQuery.includes(label) || aliases.some((alias) => normalizedQuery.includes(alias));
+  }) || null;
 }
 
 function buildLeadingCharactersCommand(query) {
@@ -775,7 +849,7 @@ function findCharacters(query) {
 
 function findB5Keys(query) {
   const normalizedQuery = normalizeText(query);
-  const wantsB5 = ["b5", "キーマップ", "キーコード", "keyboard", "キーボード"].some((word) =>
+  const wantsB5 = ["キーマップ", "キーコード", "keyboard", "キーボード"].some((word) =>
     normalizedQuery.includes(normalizeText(word))
   );
 
@@ -789,6 +863,75 @@ function findB5Keys(query) {
   });
 
   return matches.length > 0 ? matches : b5KeyMapTable;
+}
+
+function findDataFormatEditorCommands(query) {
+  const normalizedQuery = normalizeText(query);
+  const wantsEditorCommand = [
+    "editor command",
+    "編集コマンド",
+    "データフォーマットコマンド",
+    "data format command",
+    "dfコマンド",
+    "コマンド一覧",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "b0",
+    "b1",
+    "b2",
+    "b3",
+    "b4",
+    "b5",
+    "b9",
+    "ba",
+    "e4",
+    "e6",
+    "e7",
+    "e9",
+    "ea",
+    "ec",
+    "ed",
+    "ef",
+    "fb",
+    "fe",
+  ].some((word) => normalizedQuery.includes(normalizeText(word)));
+
+  if (!wantsEditorCommand) return [];
+
+  const matches = dataFormatEditorCommandTable.filter((item) => {
+    const code = normalizeText(item.code);
+    const title = normalizeText(item.title);
+    const format = normalizeText(item.format);
+    const aliases = (item.aliases || []).map(normalizeText);
+    return normalizedQuery.includes(code) || normalizedQuery.includes(title) || normalizedQuery.includes(format) || aliases.some((alias) => normalizedQuery.includes(alias));
+  });
+
+  return matches.length > 0 ? matches : dataFormatEditorCommandTable;
+}
+
+function findSymbologyCodes(query) {
+  const normalizedQuery = normalizeText(query);
+  const wantsCodeId = ["code id", "コードid", "コード種id", "シンボルid", "symbology", "コード種", "シンボル"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  );
+
+  if (!wantsCodeId) return [];
+
+  const matches = symbologyCodeTable.filter((item) => {
+    const codeId = normalizeText(item.codeId);
+    const label = normalizeText(item.label);
+    const aliases = (item.aliases || []).map(normalizeText);
+    return normalizedQuery.includes(codeId) || normalizedQuery.includes(label) || aliases.some((alias) => normalizedQuery.includes(alias));
+  });
+
+  return matches.length > 0 ? matches : symbologyCodeTable;
 }
 
 function buildIcon(pathList) {
@@ -937,6 +1080,55 @@ function b5KeysToHtml(items) {
   `;
 }
 
+function dataFormatEditorCommandsToHtml(items) {
+  const rows = items
+    .map(
+      (item) => `
+        <div class="df-command-row">
+          <div>
+            <strong>${escapeHtml(item.code)}｜${escapeHtml(item.title)}</strong>
+            <p>${escapeHtml(item.description)}</p>
+          </div>
+          <span>${escapeHtml(item.format)}</span>
+        </div>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="command-card">
+      <div>
+        <div class="command-title">Data Format編集コマンド表</div>
+        <p>IMG Scanner Utility for Honeywell_v2.0.0 の定義を元にした編集コマンド一覧です。</p>
+      </div>
+      <div class="df-command-table">${rows}</div>
+    </div>
+  `;
+}
+
+function symbologyCodesToHtml(items) {
+  const rows = items
+    .map(
+      (item) => `
+        <div class="function-code-row">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(item.codeId)}</span>
+        </div>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="command-card">
+      <div>
+        <div class="command-title">コード種ID表</div>
+        <p>Data Format条件ブロックのCode IDに指定するHoneywell IDです。</p>
+      </div>
+      <div class="function-code-table">${rows}</div>
+    </div>
+  `;
+}
+
 function escapeHtml(value) {
   return value.replace(/[&<>"']/g, (char) => {
     const entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
@@ -996,6 +1188,8 @@ function answerQuestion(question) {
   const functionCodes = findFunctionCodes(question);
   const characters = findCharacters(question);
   const b5Keys = findB5Keys(question);
+  const editorCommands = findDataFormatEditorCommands(question);
+  const symbologyCodes = findSymbologyCodes(question);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
@@ -1019,6 +1213,18 @@ function answerQuestion(question) {
   if (b5Keys.length > 0) {
     const lead = "<p>B5コマンド用のキーコードはこちらです。</p>";
     addMessage("bot", lead + b5KeysToHtml(b5Keys), { html: true });
+    return;
+  }
+
+  if (editorCommands.length > 0) {
+    const lead = "<p>Data Format Editor コマンドはこちらです。</p>";
+    addMessage("bot", lead + dataFormatEditorCommandsToHtml(editorCommands), { html: true });
+    return;
+  }
+
+  if (symbologyCodes.length > 0) {
+    const lead = "<p>コード種IDはこちらです。</p>";
+    addMessage("bot", lead + symbologyCodesToHtml(symbologyCodes), { html: true });
     return;
   }
 

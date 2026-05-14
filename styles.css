@@ -402,6 +402,37 @@ h2 {
   font-weight: 800;
 }
 
+.df-command-table {
+  display: grid;
+  gap: 8px;
+}
+
+.df-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.df-command-row strong,
+.df-command-row span {
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.df-command-row span {
+  color: var(--accent-dark);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.df-command-row p {
+  margin: 4px 0 0;
+}
+
 .aztec-card {
   display: grid;
   justify-items: start;
