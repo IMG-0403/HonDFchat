@@ -430,6 +430,7 @@ const clearButton = document.querySelector("#clearButton");
 const quickActions = document.querySelector("#quickActions");
 const categoryList = document.querySelector("#categoryList");
 const template = document.querySelector("#messageTemplate");
+const samplePrompt = document.querySelector(".sample-prompt");
 
 function normalizeText(value) {
   return value
@@ -1406,6 +1407,11 @@ messages.addEventListener("click", async (event) => {
 
 clearButton.addEventListener("click", () => {
   messages.textContent = "";
+  input.focus();
+});
+
+samplePrompt?.addEventListener("click", () => {
+  input.value = samplePrompt.dataset.samplePrompt || "";
   input.focus();
 });
 

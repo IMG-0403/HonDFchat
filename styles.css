@@ -124,6 +124,34 @@ h2 {
   font-size: 1rem;
 }
 
+.sample-prompt {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  text-align: left;
+}
+
+.sample-prompt:hover,
+.sample-prompt:focus-visible {
+  background: #c9ebe6;
+  outline: none;
+}
+
+.sample-prompt span {
+  color: var(--accent-dark);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.sample-prompt strong {
+  line-height: 1.45;
+}
+
 .panel {
   display: grid;
   gap: 12px;
