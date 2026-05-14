@@ -9,6 +9,7 @@
 
 ```text
 index.html
+mobile.html
 admin.html
 styles.css
 app.js
@@ -35,6 +36,8 @@ window.HON_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 ```
 
 ローカルPCだけで使う場合は、従来どおり `barcode-server.ps1` を起動して `config.js` のURLを `http://127.0.0.1:8765/barcode` に変更してください。
+
+スマートフォンでは `mobile.html` を開くと、質問入力と設定バーコード表示に絞った1カラム画面で利用できます。
 
 ## コマンド表の編集
 
@@ -88,6 +91,7 @@ window.HON_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 - B5修飾キー ss 表: SHIFT/ALT/CTRLの左右指定と組み合わせ
 - コード種ID表: QR Code `73`、Code128 `6A`、Code39 `62`、Data Matrix `77` など
 - Data Format Editor コマンド表: F1/F2/F5/F7/E4/FB に加え、F3/B9/E9/F4/BA/F8/F9/B0/B1/E6/E7/FE/B2/EC/ED/EF など
+- 入力された `DFMBK3...` コマンドの条件ブロックと編集コマンド説明
 
 ## コマンド表記
 

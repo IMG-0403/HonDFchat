@@ -283,6 +283,28 @@ h2 {
   color: var(--muted);
 }
 
+.mobile-link {
+  display: inline-grid;
+  place-items: center;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent-dark);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.mobile-link:hover,
+.mobile-link:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  outline: none;
+}
+
 .icon-button:hover,
 .icon-button:focus-visible {
   color: var(--warning);
@@ -702,9 +724,138 @@ h2 {
   border: 0;
 }
 
+.mobile-page {
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.mobile-shell {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(100vw, 540px);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0 auto;
+  background: var(--surface);
+}
+
+.mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(12px + env(safe-area-inset-top)) 14px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.compact-brand {
+  grid-template-columns: 44px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.compact-brand .scanner-mark {
+  height: 44px;
+}
+
+.compact-brand h1 {
+  font-size: 1rem;
+}
+
+.mobile-sample {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.mobile-page .sample-prompt {
+  padding: 10px 12px;
+}
+
+.mobile-page .sample-prompt strong {
+  font-size: 0.92rem;
+}
+
+.mobile-chat {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.mobile-page .messages {
+  gap: 12px;
+  padding: 14px;
+}
+
+.mobile-page .message {
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 8px;
+  max-width: 100%;
+}
+
+.mobile-page .message.user {
+  grid-template-columns: minmax(0, 1fr) 32px;
+}
+
+.mobile-page .avatar {
+  width: 32px;
+  height: 32px;
+}
+
+.mobile-page .bubble {
+  padding: 11px 12px;
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+
+.mobile-page .command-card,
+.mobile-page .aztec-card {
+  gap: 8px;
+}
+
+.mobile-page .aztec-card {
+  width: 100%;
+  padding: 10px;
+}
+
+.mobile-page .command-code {
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  font-size: 0.78rem;
+}
+
+.mobile-page .copy-command {
+  width: 30px;
+  height: 30px;
+}
+
+.mobile-page .aztec-canvas {
+  width: min(100%, 260px);
+  max-width: 100%;
+}
+
+.mobile-page .composer {
+  grid-template-columns: minmax(0, 1fr) 46px;
+  gap: 8px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.mobile-page .composer input {
+  font-size: 1rem;
+}
+
 @media (max-width: 820px) {
   body {
     overflow: auto;
+  }
+
+  body.mobile-page {
+    overflow: hidden;
   }
 
   .app-shell {
@@ -730,6 +881,10 @@ h2 {
 
   .message {
     max-width: 100%;
+  }
+
+  .mobile-link {
+    display: none;
   }
 }
 

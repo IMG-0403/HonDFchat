@@ -1373,6 +1373,7 @@ function iconForCategory(category) {
 
 function addMessage(role, content, options = {}) {
   if (!content) return;
+  if (!messages || !template) return;
 
   const node = template.content.firstElementChild.cloneNode(true);
   node.classList.add(role);
@@ -1986,13 +1987,13 @@ function submitQuestion(question) {
   if (!trimmed) return;
 
   addMessage("user", trimmed);
-  input.value = "";
+  if (input) input.value = "";
   window.setTimeout(() => answerQuestion(trimmed), 180);
 }
 
 function submitCommandItem(item) {
   addMessage("user", item.label);
-  input.value = "";
+  if (input) input.value = "";
   window.setTimeout(() => addMessage("bot", commandToHtml(item), { html: true }), 180);
 }
 
@@ -2001,6 +2002,8 @@ function openPdf(path) {
 }
 
 function renderQuickActions() {
+  if (!quickActions) return;
+
   const quickItems = [
     { type: "command", item: commandCatalog.find((item) => item.id === "df-show") },
     {
@@ -2053,12 +2056,12 @@ function renderCategories() {
   });
 }
 
-form.addEventListener("submit", (event) => {
+form?.addEventListener("submit", (event) => {
   event.preventDefault();
-  submitQuestion(input.value);
+  submitQuestion(input?.value || "");
 });
 
-messages.addEventListener("click", async (event) => {
+messages?.addEventListener("click", async (event) => {
   const button = event.target.closest(".copy-command");
   if (!button) return;
 
@@ -2070,9 +2073,9 @@ messages.addEventListener("click", async (event) => {
   }, 1200);
 });
 
-clearButton.addEventListener("click", () => {
-  messages.textContent = "";
-  input.focus();
+clearButton?.addEventListener("click", () => {
+  if (messages) messages.textContent = "";
+  input?.focus();
 });
 
 samplePrompt?.addEventListener("click", () => {

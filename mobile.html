@@ -2,14 +2,14 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>HON DATA FORMAT</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>HON DATA FORMAT Mobile</title>
     <link rel="stylesheet" href="styles.css?v=20260515-5" />
   </head>
-  <body>
-    <main class="app-shell">
-      <aside class="sidebar" aria-label="設定カテゴリ">
-        <div class="brand">
+  <body class="mobile-page">
+    <main class="mobile-shell">
+      <header class="mobile-header">
+        <div class="brand compact-brand">
           <div class="scanner-mark" aria-hidden="true">
             <span></span>
           </div>
@@ -18,36 +18,25 @@
             <h1>データフォーマット案内</h1>
           </div>
         </div>
+        <button class="icon-button" id="clearButton" type="button" aria-label="会話をクリア" title="会話をクリア">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6l-1 14H6L5 6" />
+            <path d="M10 11v5" />
+            <path d="M14 11v5" />
+          </svg>
+        </button>
+      </header>
 
+      <section class="mobile-sample">
         <button class="sample-prompt" type="button" data-sample-prompt="QR読み取り時に3桁目から5桁出力してください。">
           <span>サンプル例</span>
           <strong>QR読み取り時に3桁目から5桁出力してください。</strong>
         </button>
+      </section>
 
-        <section class="panel">
-          <div class="quick-actions" id="quickActions"></div>
-        </section>
-
-      </aside>
-
-      <section class="chat-area" aria-label="チャット">
-        <header class="chat-header">
-          <div>
-            <p class="eyebrow">HON DATA FORMAT</p>
-            <h2>データフォーマット設定を質問してください</h2>
-          </div>
-          <button class="icon-button" id="clearButton" type="button" aria-label="会話をクリア" title="会話をクリア">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M3 6h18" />
-              <path d="M8 6V4h8v2" />
-              <path d="M19 6l-1 14H6L5 6" />
-              <path d="M10 11v5" />
-              <path d="M14 11v5" />
-            </svg>
-          </button>
-          <a class="mobile-link" href="mobile.html">スマートフォン表示</a>
-        </header>
-
+      <section class="chat-area mobile-chat" aria-label="チャット">
         <div class="messages" id="messages" role="log" aria-live="polite"></div>
 
         <form class="composer" id="chatForm">
@@ -55,6 +44,7 @@
           <input
             id="messageInput"
             autocomplete="off"
+            inputmode="text"
             placeholder="質問を入力"
           />
           <button class="send-button" type="submit" aria-label="送信" title="送信">
