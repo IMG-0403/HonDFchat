@@ -1411,8 +1411,7 @@ clearButton.addEventListener("click", () => {
 });
 
 samplePrompt?.addEventListener("click", () => {
-  input.value = samplePrompt.dataset.samplePrompt || "";
-  input.focus();
+  submitQuestion(samplePrompt.dataset.samplePrompt || "");
 });
 
 renderQuickActions();
