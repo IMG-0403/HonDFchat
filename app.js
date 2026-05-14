@@ -166,6 +166,16 @@ const commandCatalog = [
     notes: ["0 は Primary Data Format、099 は全端末、62 は Code39、9999 は全桁数を表す指定です。", "F100 は読み取りデータを全て出力し、EF0600 は5ms単位で600回、つまり3秒の待機を挿入する指定です。", "B5010072 は F3 キーを付加する指定です。EF/B5 はキーボードウェッジ、USB-HID使用時の応用例です。"],
   },
   {
+    id: "df-example-code128-delay-2s-f4",
+    label: "Code128データ入力の2秒後にF4を付加",
+    category: "登録例",
+    summary: "Code128を対象に、読み取りデータを出力して2秒待機した後、F4キーを付加します。",
+    requestText: "Code128データ入力の2秒経過後にF4を付加",
+    keywords: ["code128", "code 128", "コード128", "2秒", "2 秒", "経過後", "待機", "ディレイ", "delay", "f4", "付加", "追加", "キー", "ef0400", "b5010073"],
+    command: "DFMBK300996A9999F100EF0400B5010073.",
+    notes: ["0 は Primary Data Format、099 は全端末、6A は Code128、9999 は全桁数を表す指定です。", "F100 は読み取りデータを全て出力し、EF0400 は5ms単位で400回、つまり2秒の待機を挿入する指定です。", "B5010073 は F4 キーを付加する指定です。EF/B5 はキーボードウェッジ、USB-HID使用時の応用例です。"],
+  },
+  {
     id: "df-example-code128-prefix-b21",
     label: "Code128限定で先頭にb21を付加",
     category: "登録例",
@@ -358,6 +368,9 @@ const b5KeyMapTable = [
   { key: "I", hex: "18", aliases: ["i", "アルファベットI"] },
   { key: "J", hex: "25", aliases: ["j", "アルファベットJ"] },
   { key: "K", hex: "26", aliases: ["k", "アルファベットK"] },
+  { key: "L", hex: "27", aliases: ["l", "アルファベットL"] },
+  { key: "M", hex: "33", aliases: ["m", "アルファベットM"] },
+  { key: "N", hex: "32", aliases: ["n", "アルファベットN"] },
   { key: "O", hex: "19", aliases: ["o", "アルファベットO"] },
   { key: "P", hex: "1A", aliases: ["p", "アルファベットP"] },
   { key: "Q", hex: "11", aliases: ["q", "アルファベットQ"] },
@@ -394,7 +407,7 @@ const efDelayTable = [
 ];
 
 const symbologyCodeTable = [
-  { codeId: "99", label: "全コード種", aliases: ["all symbologies", "全シンボル", "全コード", "全コード種"] },
+  { codeId: "99", label: "全コード種", aliases: ["all symbologies", "全シンボル", "全コード", "全コード種", "全バーコード", "全バーコード種", "全てのバーコード種", "すべてのバーコード種"] },
   { codeId: "61", label: "Codabar/NW-7", aliases: ["codabar", "コーダバー", "nw-7", "nw7"] },
   { codeId: "68", label: "Code 11", aliases: ["code11", "code 11", "コード11"] },
   { codeId: "6A", label: "Code128", aliases: ["code128", "code 128", "コード128"] },
@@ -902,32 +915,56 @@ function findExactSuffixCtrlCommand(query) {
   return commandCatalog.find((item) => item.id === "df-example-suffix-ctrl") || null;
 }
 
-function findExactCode39DelayKeyCommand(query) {
+function findDelayCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const mentionsCode39 = ["code39", "code 39", "コード39"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsOneSecond = ["1秒", "1 秒", "1sec", "1 sec", "1000ms"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsTwoSeconds = ["2秒", "2 秒", "2sec", "2 sec", "2000ms"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsThreeSeconds = ["3秒", "3 秒", "3sec", "3 sec", "3000ms"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsF3 = normalizedQuery.includes("f3");
-  const mentionsF4 = normalizedQuery.includes("f4");
-  const mentionsDelayOrAfter = ["経過後", "後", "待機", "ディレイ", "delay"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsAppend = ["付加", "追加", "つける", "付ける"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  return efDelayTable.find((item) => {
+    const command = normalizeText(item.command);
+    const delay = normalizeText(item.delay);
+    const aliases = (item.aliases || []).map(normalizeText);
+    return normalizedQuery.includes(command) || normalizedQuery.includes(delay) || aliases.some((alias) => normalizedQuery.includes(alias));
+  }) || null;
+}
 
-  if (!mentionsCode39 || (!mentionsF3 && !mentionsF4) || !mentionsDelayOrAfter || !mentionsAppend) return null;
-
-  if (mentionsThreeSeconds && mentionsF3) {
-    return commandCatalog.find((item) => item.id === "df-example-code39-delay-3s-f3") || null;
+function findB5KeyForAppend(query) {
+  const normalizedQuery = normalizeText(query);
+  const functionKeyMatch = normalizedQuery.match(/\bf(1[0-2]|[1-9])\b/);
+  if (functionKeyMatch) {
+    return b5KeyMapTable.find((item) => normalizeText(item.key) === `f${functionKeyMatch[1]}`) || null;
   }
 
-  if (mentionsOneSecond && mentionsF4) {
-    return commandCatalog.find((item) => item.id === "df-example-code39-delay-1s-f4") || null;
-  }
-
-  if (mentionsTwoSeconds && mentionsF4) {
-    return commandCatalog.find((item) => item.id === "df-example-code39-delay-f4") || null;
+  const letterMatch = normalizedQuery.match(/(?:^|[^a-z0-9])([a-z])(?:キー|key)?(?:を)?(?:付加|追加|つける|付ける)/);
+  if (letterMatch) {
+    return b5KeyMapTable.find((item) => normalizeText(item.key) === letterMatch[1]) || null;
   }
 
   return null;
+}
+
+function buildSymbologyDelayKeyCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const mentionsDelayOrAfter = ["経過後", "後", "待機", "ディレイ", "delay"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = ["付加", "追加", "つける", "付ける"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  if (!mentionsDelayOrAfter || !mentionsAppend) return null;
+
+  const symbology = getSymbologyTarget(normalizedQuery);
+  const delay = findDelayCommand(query);
+  const key = findB5KeyForAppend(query);
+  if (!symbology || !delay || !key) return null;
+
+  return {
+    id: `df-generated-${symbology.codeId}-${delay.command}-${key.hex}`,
+    label: `${symbology.label}データ入力の${delay.delay}後に${key.key}を付加`,
+    category: "登録例",
+    summary: `${symbology.label}を対象に、読み取りデータを出力して${delay.delay}待機した後、${key.key}キーを付加します。`,
+    keywords: [],
+    command: `DFMBK30099${symbology.codeId}9999F100${delay.command}B50100${key.hex}.`,
+    notes: [
+      `0 は Primary Data Format、099 は全端末、${symbology.codeId} は ${symbology.label}、9999 は全桁数を表す指定です。`,
+      `F100 は読み取りデータを全て出力し、${delay.command} は ${delay.delay} の待機を挿入する指定です。`,
+      `B50100${key.hex} は ${key.key} キーを付加する指定です。EF/B5 はキーボードウェッジ、USB-HID使用時の応用例です。`,
+    ],
+  };
+
 }
 
 function buildDeleteThenRangeCommand(query) {
@@ -1458,7 +1495,7 @@ function renderAztecBarcodes(root = document) {
 function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const suffixCtrlCommand = findExactSuffixCtrlCommand(question);
-  const code39DelayKeyCommand = findExactCode39DelayKeyCommand(question);
+  const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
@@ -1478,8 +1515,8 @@ function answerQuestion(question) {
     return;
   }
 
-  if (code39DelayKeyCommand) {
-    addMessage("bot", commandToHtml(code39DelayKeyCommand), { html: true });
+  if (symbologyDelayKeyCommand) {
+    addMessage("bot", commandToHtml(symbologyDelayKeyCommand), { html: true });
     return;
   }
 

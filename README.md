@@ -73,11 +73,13 @@ window.HON_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 - 応用例: Code39データ入力の1秒経過後にF4を付加
 - 応用例: Code39データ入力の2秒経過後にF4を付加
 - 応用例: Code39データ入力の3秒経過後にF3を付加
+- 応用例: Code128データ入力の2秒経過後にF4を付加
+- 自動生成: 任意のコード種で、0.5/1/2/3秒などの指定秒数経過後にB5キーを付加
 - 応用例: Code128限定で全桁対象の先頭に b21 を付加
 - ファンクションコード Hex/ASCII表: HT(TAB) `09`、CR `0D`、GS `1D` など
 - キャラクター Hex/ASCII表: SPACE `20` から `~` `7E` まで
 - EFディレイ表: `EF0100` = 0.5秒 から `EF0600` = 3秒まで
-- B5キーマップ表: 指定英字、F1-F12のキーストローク番号
+- B5キーマップ表: A-Z、F1-F12のキーストローク番号
 - コード種ID表: QR Code `73`、Code128 `6A`、Code39 `62`、Data Matrix `77` など
 - Data Format Editor コマンド表: F1/F2/F5/F7/E4/FB に加え、F3/B9/E9/F4/BA/F8/F9/B0/B1/E6/E7/FE/B2/EC/ED/EF など
 
