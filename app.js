@@ -515,6 +515,8 @@ const dataFormatEditorCommandTable = [
 const fallbackText =
   "該当するデータフォーマット設定が見つかりませんでした。\n\n例のように、登録・削除・有効化・エラー音・出力例を含めて質問してください。\n「データフォーマットを表示」「全削除」「Enterを付ける例」「必須一致にしたい」「不一致エラー音を消したい」";
 
+const appendWords = ["付加", "追加", "つける", "付ける", "挿入"];
+
 const barcodeUnavailableHtml = `
   <div class="contact-message">
     <p>申し訳ございません。設定バーコードを生成できません。</p>
@@ -1007,7 +1009,7 @@ function buildSuffixB5Command(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsModifier = ["ctrl", "control", "コントロール", "alt", "shift"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsSuffix = ["末尾", "後ろ", "最後"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsAppend = ["付加", "追加", "つける", "付ける"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
 
   if (!mentionsSuffix || !mentionsAppend) return null;
 
@@ -1186,7 +1188,7 @@ function findB5KeyForAppend(query) {
     return b5KeyMapTable.find((item) => normalizeText(item.key) === `f${functionKeyMatch[1]}`) || null;
   }
 
-  const letterMatch = normalizedQuery.match(/(?:^|[^a-z0-9])([a-z])(?:キー|key)?(?:を)?(?:付加|追加|つける|付ける)/);
+  const letterMatch = normalizedQuery.match(/(?:^|[^a-z0-9])([a-z])(?:キー|key)?(?:を)?(?:付加|追加|つける|付ける|挿入)/);
   if (letterMatch) {
     return b5KeyMapTable.find((item) => normalizeText(item.key) === letterMatch[1]) || null;
   }
@@ -1223,7 +1225,7 @@ function getB5ModifierForAppend(query) {
 function buildSymbologyDelayKeyCommand(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsDelayOrAfter = ["経過後", "後", "待機", "ディレイ", "delay"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsAppend = ["付加", "追加", "つける", "付ける"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
   if (!mentionsDelayOrAfter || !mentionsAppend) return null;
 
   const symbology = getSymbologyTarget(normalizedQuery);
