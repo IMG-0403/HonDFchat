@@ -685,6 +685,16 @@ function buildLeadingCharactersCommand(query) {
 function buildRangeCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
   const rangeMatches = [...normalizedQuery.matchAll(/(\d{1,2})\s*桁目\s*から\s*(\d{1,2})\s*桁/g)];
+  const structuredStartMatch = normalizedQuery.match(/(?:スタート|開始)\s*桁\s*[:：]?\s*(\d{1,2})\s*桁目?/);
+  const structuredCountMatch = normalizedQuery.match(/(?:出力|送信|表示)\s*桁数\s*[:：]?\s*(\d{1,2})\s*桁/);
+
+  if (rangeMatches.length === 0 && structuredStartMatch && structuredCountMatch) {
+    rangeMatches.push([
+      structuredStartMatch[0],
+      structuredStartMatch[1],
+      structuredCountMatch[1],
+    ]);
+  }
 
   if (rangeMatches.length === 0 || !/(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) return null;
 
@@ -744,7 +754,7 @@ function buildRangeCharactersCommand(query) {
 
 function buildFromPositionToEndCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const match = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:末尾|最後|全部|すべて|全て))/);
+  const match = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
 
   if (!match || !/(出力|送信|表示|取り出|切り出)/.test(normalizedQuery)) return null;
 
@@ -1424,7 +1434,7 @@ function commandToHtml(item) {
 
 function shouldClearSettingsBeforeCommand(query) {
   const normalizedQuery = normalizeText(query);
-  return [
+  const mentionsClear = [
     "設定削除してから",
     "設定削除して",
     "設定を削除してから",
@@ -1434,6 +1444,9 @@ function shouldClearSettingsBeforeCommand(query) {
     "設定を消去してから",
     "設定を消去して",
   ].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const requestsNewDataFormat = normalizedQuery.includes("データフォーマット") && /(作成|登録|新規)/.test(normalizedQuery);
+
+  return mentionsClear || requestsNewDataFormat;
 }
 
 function applyClearSettingsPrefix(item, shouldPrefix) {
