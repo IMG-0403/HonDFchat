@@ -855,7 +855,7 @@ function findReplaceCharacters(query) {
     .replace(/\s+/g, " ")
     .trim();
   const transformMatch = normalizedCaseQuery.match(
-    /([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot)\s*を\s*([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot)\s*(?:に|へ)?\s*(?:置換|置き換え|置き換えて|変換)/i
+    /([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus)\s*を\s*([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus)\s*(?:に|へ)?\s*(?:置換|置き換え|置き換えて|変換)/i
   );
 
   if (!transformMatch) return null;
@@ -953,6 +953,8 @@ function normalizeReplaceCharacter(value) {
   if (["スペース", "space", "空白"].includes(lowered)) return " ";
   if (["スラッシュ", "slash"].includes(lowered)) return "/";
   if (["ピリオド", "ドット", "period", "dot"].includes(lowered)) return ".";
+  if (["ハイフン", "hyphen", "マイナス", "minus"].includes(lowered)) return "-";
+  if (["カンマ", "comma"].includes(lowered)) return ",";
   if (normalized.length === 1 && normalized >= "!" && normalized <= "~") return normalized;
   return null;
 }
@@ -961,6 +963,8 @@ function describeReplaceCharacter(char) {
   if (char === " ") return "スペース";
   if (char === "/") return "/(スラッシュ)";
   if (char === ".") return ".(ピリオド)";
+  if (char === "-") return "-(ハイフン)";
+  if (char === ",") return ",(カンマ)";
   return char;
 }
 
@@ -1010,7 +1014,7 @@ function getReadLengthsForSuffixB5(normalizedQuery) {
 function buildSuffixB5Command(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsModifier = ["ctrl", "control", "コントロール", "alt", "shift"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsSuffix = ["末尾", "後ろ", "最後"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsSuffix = ["末尾", "後ろ", "最後", "サフィックス", "suffix"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
 
   if (!mentionsSuffix || !mentionsAppend) return null;
@@ -1046,16 +1050,78 @@ function buildSuffixB5Command(query) {
   };
 }
 
+function buildPrefixB5Command(query) {
+  const normalizedQuery = normalizeText(query);
+  const mentionsPrefix = ["先頭", "前", "最初", "プリフィックス", "prefix"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+
+  if (!mentionsPrefix || !mentionsAppend) return null;
+
+  const key = findB5KeyForAppend(query);
+  if (!key) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengthsForSuffixB5(normalizedQuery);
+  const modifier = getB5ModifierForAppend(query);
+  const keystrokeCommand = `B501${modifier.hex}${key.hex}`;
+  const keystrokeLabel = `${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key}`;
+  const editorCommand = `${keystrokeCommand}F100`;
+  const codeLabel = symbologyTargets.map((item) => item.label).join("、");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-prefix-b5-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${keystrokeCommand}`,
+    label: `${codeLabel}・${lengthLabel} 先頭に${keystrokeLabel}を付加`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、読み取りデータの先頭に${keystrokeLabel}キーを付加します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    notes: [
+      `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は ${item.label}`).join("、")} を表す指定です。`,
+      lengthNote,
+      `${keystrokeCommand} は先頭に ${keystrokeLabel} キーを付加し、F100 はその後に読み取りデータを全て出力する指定です。左右指定がない修飾キーは左優先です。`,
+      "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。",
+    ],
+  };
+}
+
 function buildTrimLeadingZeroesCommand(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsLeading = ["先頭", "頭", "前方"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsZero = ["0", "ゼロ", "zero"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsRemove = ["削除", "除去", "消す", "消して", "取り除"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsOutput = ["出力", "送信", "表示"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsZeroSuppress = ["0サプレス", "0 サプレス", "ゼロサプレス", "ゼロ サプレス", "zero suppress"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  );
 
-  if (!mentionsLeading || !mentionsZero || !mentionsRemove || !mentionsOutput) return null;
+  if (!mentionsZeroSuppress && (!mentionsLeading || !mentionsZero || !mentionsRemove || !mentionsOutput)) return null;
 
-  return commandCatalog.find((item) => item.id === "df-example-trim-leading-zeroes") || null;
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const editorCommand = "E630F100";
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-zero-suppress-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
+    label: `${codeLabel}・${lengthLabel} 0サプレスして出力`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、読み取りデータ先頭の連続する0をスキップして出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      "E630 は現在のカーソル位置から 0 以外のキャラクタ手前まで移動する指定です。",
+      "F100 は移動後の位置から末尾までを出力します。例: 0000123 は 123 と出力されます。",
+    ],
+  };
 }
 
 function normalizeAsciiText(value) {
@@ -1072,8 +1138,8 @@ function stringToAsciiHex(value) {
 function findPrefixText(query) {
   const asciiQuery = normalizeAsciiText(query);
   const patterns = [
-    /(?:先頭|データ先頭)\s*(?:に|へ)?\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i,
-    /(?:文字列)\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:先頭|データ先頭).*(?:付加|追加|つける|付ける|挿入)/i,
+    /(?:先頭|データ先頭|プリフィックス|prefix)\s*(?:に|へ)?\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i,
+    /(?:文字列)\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:先頭|データ先頭|プリフィックス|prefix).*(?:付加|追加|つける|付ける|挿入)/i,
   ];
 
   for (const pattern of patterns) {
@@ -2058,6 +2124,7 @@ function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
   const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
+  const prefixB5Command = buildPrefixB5Command(question);
   const prefixTextCommand = buildPrefixTextCommand(question);
   const suffixB5Command = buildSuffixB5Command(question);
   const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
@@ -2084,6 +2151,11 @@ function answerQuestion(question) {
 
   if (insertTextAtPositionCommand) {
     addMessage("bot", commandHtml(insertTextAtPositionCommand), { html: true });
+    return;
+  }
+
+  if (prefixB5Command) {
+    addMessage("bot", commandHtml(prefixB5Command), { html: true });
     return;
   }
 
