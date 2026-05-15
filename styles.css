@@ -525,6 +525,12 @@ h2 {
   margin: 16px auto;
 }
 
+.admin-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: auto;
+}
+
 .admin-header,
 .admin-card {
   padding: 18px 20px;
