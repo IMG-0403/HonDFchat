@@ -937,6 +937,7 @@ function findDeleteTargetCharacters(query) {
 
   const targetText = targetMatch[1]
     .replace(/^(?:.*?時|.*?場合|.*?とき)\s*/i, "")
+    .replace(/^(?:.*?読み取りで|.*?読取で|.*?読み取り時に|.*?読取時に)\s*/i, "")
     .replace(/^(?:に|、|,|\s)+/, "")
     .trim();
   const rawTargets = targetText
