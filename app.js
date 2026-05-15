@@ -818,16 +818,9 @@ function findExactSpaceTransformCommand(query) {
 
   if (!mentionsReplace) return null;
 
-  const normalizedCaseQuery = query
-    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
-    .replace(/\s+/g, " ")
-    .trim();
-  const transformMatch = normalizedCaseQuery.match(/(\S+)\s*を\s*(\S+)\s*(?:に|へ)?\s*(?:置換|置き換え|置き換えて|変換)/i);
-
-  if (!transformMatch) return null;
-
-  const sourceChar = normalizeReplaceCharacter(transformMatch[1]);
-  const targetChar = normalizeReplaceCharacter(transformMatch[2]);
+  const replaceChars = findReplaceCharacters(query);
+  const sourceChar = replaceChars?.sourceChar;
+  const targetChar = replaceChars?.targetChar;
   if (!sourceChar || !targetChar) return null;
 
   const sourceHex = sourceChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
