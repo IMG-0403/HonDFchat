@@ -832,16 +832,19 @@ function findExactSpaceTransformCommand(query) {
 
   const sourceHex = sourceChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
   const targetHex = targetChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const symbology = getSymbologyTarget(normalizedQuery);
+  const codeId = symbology ? symbology.codeId : "99";
+  const codeLabel = symbology ? symbology.label : "全コード種";
 
   return {
-    id: `df-generated-replace-${sourceHex}-with-${targetHex}`,
-    label: `${describeReplaceCharacter(sourceChar)}を${describeReplaceCharacter(targetChar)}に置換`,
+    id: `df-generated-replace-${sourceHex}-with-${targetHex}-${codeId}`,
+    label: `${codeLabel} ${describeReplaceCharacter(sourceChar)}を${describeReplaceCharacter(targetChar)}に置換`,
     category: "登録例",
-    summary: `コード種、桁数に関係なく、${describeReplaceCharacter(sourceChar)}を${describeReplaceCharacter(targetChar)}に置き換えて出力します。`,
+    summary: `${codeLabel}を対象に、${describeReplaceCharacter(sourceChar)}を${describeReplaceCharacter(targetChar)}に置き換えて出力します。`,
     keywords: [],
-    command: `DFMBK30099999999E402${sourceHex}${targetHex}F100.`,
+    command: `DFMBK30099${codeId}9999E402${sourceHex}${targetHex}F100.`,
     notes: [
-      "0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。",
+      `0 は Primary Data Format、099 は全端末、${codeId} は${codeLabel}、9999 は全桁数を表す指定です。`,
       `E4 は置換コマンド、02 は置換キャラクタ数、${sourceHex} は置換前の ${describeReplaceCharacter(sourceChar)}、${targetHex} は置換後の ${describeReplaceCharacter(targetChar)} です。`,
       "F100 は置換完了後に全てのデータを送信する指定です。",
     ],
@@ -855,7 +858,7 @@ function findReplaceCharacters(query) {
     .replace(/\s+/g, " ")
     .trim();
   const transformMatch = normalizedCaseQuery.match(
-    /([!-~]|スペース|space|空白|スラッシュ|slash)\s*を\s*([!-~]|スペース|space|空白|スラッシュ|slash)\s*(?:に|へ)?\s*(?:置換|置き換え|置き換えて|変換)/i
+    /([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot)\s*を\s*([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot)\s*(?:に|へ)?\s*(?:置換|置き換え|置き換えて|変換)/i
   );
 
   if (!transformMatch) return null;
@@ -952,6 +955,7 @@ function normalizeReplaceCharacter(value) {
   const lowered = normalized.toLowerCase();
   if (["スペース", "space", "空白"].includes(lowered)) return " ";
   if (["スラッシュ", "slash"].includes(lowered)) return "/";
+  if (["ピリオド", "ドット", "period", "dot"].includes(lowered)) return ".";
   if (normalized.length === 1 && normalized >= "!" && normalized <= "~") return normalized;
   return null;
 }
@@ -959,6 +963,7 @@ function normalizeReplaceCharacter(value) {
 function describeReplaceCharacter(char) {
   if (char === " ") return "スペース";
   if (char === "/") return "/(スラッシュ)";
+  if (char === ".") return ".(ピリオド)";
   return char;
 }
 
