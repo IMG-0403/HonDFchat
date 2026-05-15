@@ -669,6 +669,157 @@ function buildTargetBlocks(symbologyTargets, readLengths, editorCommand) {
   );
 }
 
+function symbologyTargetsToText(targets) {
+  if (!targets || targets.length === 0 || targets.some((target) => target.codeId === "99")) return "";
+  return targets.map((target) => target.label).join("と");
+}
+
+function readLengthsToText(readLengths) {
+  return readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "";
+}
+
+function parseStructuredNlpRequest(query) {
+  const normalizedQuery = normalizeText(query);
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const structured = {
+    original: query,
+    normalized: normalizedQuery,
+    symbologyTargets,
+    readLengths,
+    operation: null,
+    canonicalQuery: "",
+  };
+
+  const replaceChars = findReplaceCharacters(query);
+  if (replaceChars) {
+    structured.operation = {
+      type: "replace",
+      sourceChar: replaceChars.sourceChar,
+      targetChar: replaceChars.targetChar,
+    };
+  } else {
+    const deleteChars = findDeleteTargetCharacters(query);
+    const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
+    if (mentionsDelete && deleteChars.length > 0) {
+      structured.operation = { type: "delete", chars: deleteChars };
+    }
+  }
+
+  if (!structured.operation) {
+    const rangeMatches = [...normalizedQuery.matchAll(/(\d{1,2})\s*桁目\s*から\s*(\d{1,2})\s*桁/g)];
+    if (rangeMatches.length > 0) {
+      structured.operation = {
+        type: "range",
+        ranges: rangeMatches.map((match) => ({ startPosition: Number(match[1]), characterCount: Number(match[2]) })),
+      };
+    }
+  }
+
+  if (!structured.operation) {
+    const fromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+    if (fromMatch) {
+      structured.operation = { type: "fromPositionToEnd", startPosition: Number(fromMatch[1]) };
+    }
+  }
+
+  if (!structured.operation) {
+    const leadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,2})\s*桁/);
+    if (leadingMatch && /(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) {
+      structured.operation = { type: "leading", characterCount: Number(leadingMatch[1]) };
+    }
+  }
+
+  if (!structured.operation) {
+    const mentionsZeroSuppress = ["0サプレス", "0 サプレス", "ゼロサプレス", "ゼロ サプレス", "zero suppress"].some((word) =>
+      normalizedQuery.includes(normalizeText(word))
+    );
+    const mentionsLeadingZeroRemove =
+      ["先頭", "頭", "前方"].some((word) => normalizedQuery.includes(normalizeText(word))) &&
+      ["0", "ゼロ", "zero"].some((word) => normalizedQuery.includes(normalizeText(word))) &&
+      ["削除", "除去", "消す", "消して", "取り除"].some((word) => normalizedQuery.includes(normalizeText(word)));
+    if (mentionsZeroSuppress || mentionsLeadingZeroRemove) {
+      structured.operation = { type: "zeroSuppress" };
+    }
+  }
+
+  structured.canonicalQuery = buildCanonicalQueryFromStructuredNlp(structured);
+  return structured.operation ? structured : null;
+}
+
+function buildCanonicalQueryFromStructuredNlp(structured) {
+  const targetText = symbologyTargetsToText(structured.symbologyTargets);
+  const lengthText = readLengthsToText(structured.readLengths);
+  const scopeText = `${targetText}${lengthText}` || "データ";
+  const operation = structured.operation;
+
+  if (operation.type === "delete") {
+    return `${scopeText} ${operation.chars.map(characterToRequestToken).join("と")}削除`;
+  }
+
+  if (operation.type === "replace") {
+    return `${scopeText} ${characterToRequestToken(operation.sourceChar)}を${characterToRequestToken(operation.targetChar)}に置換`;
+  }
+
+  if (operation.type === "range") {
+    return `${scopeText} ${operation.ranges.map((range) => `${range.startPosition}桁目から${range.characterCount}桁`).join("と")}出力`;
+  }
+
+  if (operation.type === "fromPositionToEnd") {
+    return `${scopeText} ${operation.startPosition}桁目から出力`;
+  }
+
+  if (operation.type === "leading") {
+    return `${scopeText} 先頭${operation.characterCount}桁出力`;
+  }
+
+  if (operation.type === "zeroSuppress") {
+    return `${scopeText} 0サプレス`;
+  }
+
+  return structured.original;
+}
+
+function characterToRequestToken(char) {
+  if (char === " ") return "スペース";
+  if (char === "/") return "スラッシュ";
+  if (char === ".") return "ピリオド";
+  if (char === "-") return "ハイフン";
+  if (char === ",") return "カンマ";
+  return char;
+}
+
+function buildCommandFromStructuredNlp(question) {
+  const structured = parseStructuredNlpRequest(question);
+  if (!structured) return null;
+
+  const query = structured.canonicalQuery || question;
+  const builders = [
+    buildReplaceThenRangeCommand,
+    buildTrimLeadingZeroesCommand,
+    findExactSpaceTransformCommand,
+    findExactDeleteCharacterCommand,
+    buildRangeCharactersCommand,
+    buildFromPositionToEndCommand,
+    buildLeadingCharactersCommand,
+  ];
+
+  for (const builder of builders) {
+    const command = builder(query);
+    if (command) {
+      return {
+        ...command,
+        notes: [
+          `NLP解析: ${structured.operation.type} / 対象 ${symbologyTargetsToText(structured.symbologyTargets) || "全コード種"} / 桁数 ${readLengthsToText(structured.readLengths) || "全桁数"}`,
+          ...(command.notes || []),
+        ],
+      };
+    }
+  }
+
+  return null;
+}
+
 function buildLeadingCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
   const match = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,2})\s*桁/);
@@ -2160,6 +2311,7 @@ function answerQuestion(question) {
 
   const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
   const commandHtml = (item) => commandToHtml(applyClearSettingsPrefix(item, shouldClearSettings));
+  const structuredNlpCommand = buildCommandFromStructuredNlp(question);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
   const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
@@ -2177,6 +2329,11 @@ function answerQuestion(question) {
   const b5ModifierMatches = findB5Modifiers(question);
   const b5KeyMatches = findB5Keys(question);
   const matches = findMatches(question);
+
+  if (structuredNlpCommand) {
+    addMessage("bot", commandHtml(structuredNlpCommand), { html: true });
+    return;
+  }
 
   if (replaceThenRangeCommand) {
     addMessage("bot", commandHtml(replaceThenRangeCommand), { html: true });
