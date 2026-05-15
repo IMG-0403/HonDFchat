@@ -634,14 +634,14 @@ h2 {
 
 .admin-list-item.admin-list-item-archived,
 .admin-list-item[data-status="archived"] {
-  border-color: #cfd6d2;
-  background: #eef1ef;
-  color: #6f7774;
+  border-color: #b8c1bc;
+  background: #dfe5e2;
+  color: #56605c;
 }
 
 .admin-list-item.admin-list-item-archived code,
 .admin-list-item[data-status="archived"] code {
-  opacity: 0.78;
+  opacity: 0.7;
 }
 
 .admin-list-item > div:first-child {
