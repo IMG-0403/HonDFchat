@@ -1670,6 +1670,10 @@ function shouldClearSettingsBeforeCommand(query) {
     "設定消去して",
     "設定を消去してから",
     "設定を消去して",
+    "設定クリアしてから",
+    "設定クリアして",
+    "設定をクリアしてから",
+    "設定をクリアして",
   ].some((word) => normalizedQuery.includes(normalizeText(word)));
   const requestsNewDataFormat = normalizedQuery.includes("データフォーマット") && /(作成|登録|新規)/.test(normalizedQuery);
 
