@@ -629,6 +629,10 @@ function buildDataFormatCommandFromBlocks(blocks) {
   return blocks.map((block, index) => (index === 0 ? `DFMBK3${block}` : block)).join("|") + ".";
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function getReadLengths(normalizedQuery) {
   const lengthPattern = /((?:\d{1,4}\s*桁\s*(?:と|、|,|，|\/|\+|&|and)?\s*)+)\s*(?:読み取り|読取|バーコード|コード)/g;
   const lengths = [];
@@ -639,6 +643,19 @@ function getReadLengths(normalizedQuery) {
     const numberMatches = lengthText.matchAll(/(\d{1,4})\s*桁/g);
     for (const numberMatch of numberMatches) {
       lengths.push(Number(numberMatch[1]));
+    }
+  }
+
+  const symbologyNames = symbologyCodeTable
+    .flatMap((item) => [item.label, ...(item.aliases || [])])
+    .map(normalizeText)
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
+  for (const symbologyName of symbologyNames) {
+    const inlineLengthPattern = new RegExp(`${escapeRegExp(symbologyName)}\\s*(\\d{1,4})\\s*桁\\s*(?:読み取り|読取|バーコード|コード)`, "g");
+    while ((match = inlineLengthPattern.exec(normalizedQuery)) !== null) {
+      lengths.push(Number(match[1]));
     }
   }
 
