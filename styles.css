@@ -778,6 +778,7 @@ h2 {
 }
 
 .mobile-chat {
+  grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
   border: 0;
   border-radius: 0;
@@ -816,9 +817,15 @@ h2 {
   gap: 8px;
 }
 
+.mobile-page .command-card {
+  justify-items: center;
+}
+
 .mobile-page .aztec-card {
   width: 100%;
   padding: 10px;
+  justify-items: center;
+  text-align: center;
 }
 
 .mobile-page .command-code {
@@ -834,18 +841,23 @@ h2 {
 }
 
 .mobile-page .aztec-canvas {
-  width: min(100%, 260px);
+  display: block;
+  width: min(100%, 200px);
   max-width: 100%;
+  margin: 2px auto 12px;
 }
 
 .mobile-page .composer {
   grid-template-columns: minmax(0, 1fr) 46px;
+  align-items: center;
   gap: 8px;
   padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.96);
 }
 
 .mobile-page .composer input {
+  height: 46px;
+  min-height: 46px;
   font-size: 1rem;
 }
 

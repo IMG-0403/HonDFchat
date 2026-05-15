@@ -1860,6 +1860,9 @@ function renderAztecBarcodes(root = document) {
         canvas.height = image.naturalHeight;
         context.clearRect(0, 0, canvas.width, canvas.height);
         context.drawImage(image, 0, 0);
+        window.requestAnimationFrame(() => {
+          canvas.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+        });
         URL.revokeObjectURL(imageUrl);
       };
       image.onerror = () => {
