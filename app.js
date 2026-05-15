@@ -1006,22 +1006,27 @@ function findExactDeleteCharacterCommand(query) {
   const targetChars = findDeleteTargetCharacters(query);
   if (targetChars.length === 0) return null;
 
-  const symbology = getSymbologyTarget(normalizedQuery);
-  const codeId = symbology ? symbology.codeId : "99";
-  const codeLabel = symbology ? symbology.label : "全コード種";
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
   const targetHex = targetChars.map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
   const suppressCount = targetChars.length.toString().padStart(2, "0");
   const targetLabel = targetChars.map(describeReplaceCharacter).join("と");
+  const editorCommand = `FB${suppressCount}${targetHex}F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
 
   return {
-    id: `df-generated-delete-${targetHex}-${codeId}`,
-    label: `${codeLabel} ${targetLabel}を削除`,
+    id: `df-generated-delete-${targetHex}-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
+    label: `${codeLabel}・${lengthLabel} ${targetLabel}を削除`,
     category: "登録例",
-    summary: `${codeLabel}を対象に、${targetLabel}を削除して出力します。`,
+    summary: `${codeLabel}・${lengthLabel}を対象に、${targetLabel}を削除して出力します。`,
     keywords: [],
-    command: `DFMBK30099${codeId}9999FB${suppressCount}${targetHex}F100.`,
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
     notes: [
-      `0 は Primary Data Format、099 は全端末、${codeId} は${codeLabel}、9999 は全桁数を表す指定です。`,
+      `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `FB は削除コマンド、${suppressCount} は削除キャラクタ数、${targetHex} は削除対象の ${targetLabel} です。`,
       "F100 は削除完了後に全てのデータを送信する指定です。",
     ],
