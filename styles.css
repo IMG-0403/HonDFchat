@@ -612,6 +612,18 @@ h2 {
   background: var(--surface);
 }
 
+.admin-list-item.admin-list-item-archived,
+.admin-list-item[data-status="archived"] {
+  border-color: #cfd6d2;
+  background: #eef1ef;
+  color: #6f7774;
+}
+
+.admin-list-item.admin-list-item-archived code,
+.admin-list-item[data-status="archived"] code {
+  opacity: 0.78;
+}
+
 .admin-list-item > div:first-child {
   display: grid;
   gap: 2px;
@@ -731,7 +743,7 @@ h2 {
 
 .mobile-shell {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   width: min(100vw, 540px);
   height: 100vh;
   height: 100dvh;

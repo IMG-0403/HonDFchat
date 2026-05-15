@@ -129,11 +129,13 @@ function renderRequests(rows) {
 
   rows.forEach((row) => {
     const item = document.createElement("article");
-    item.className = "admin-list-item";
+    const statusClass = getStatusClass(row.status);
+    item.className = `admin-list-item ${statusClass}`;
+    item.dataset.status = getStatusKey(row.status);
     item.innerHTML = `
       <div>
         <strong>${escapeHtml(row.title || row.request_text)}</strong>
-        <span>${escapeHtml(row.status)} / ${escapeHtml(formatDate(row.updated_at))}</span>
+        <span>${escapeHtml(getStatusLabel(row.status))} / ${escapeHtml(formatDate(row.updated_at))}</span>
       </div>
       <p>${escapeHtml(row.request_text)}</p>
       <code>${escapeHtml(row.command)}</code>
@@ -148,6 +150,27 @@ function renderRequests(rows) {
     item.querySelector('[data-action="delete"]').addEventListener("click", () => deleteRequest(row.id));
     requestList.append(item);
   });
+}
+
+function getStatusClass(status) {
+  const normalized = getStatusKey(status);
+  if (normalized === "archived") return "admin-list-item-archived";
+  if (normalized === "published") return "admin-list-item-published";
+  return "admin-list-item-draft";
+}
+
+function getStatusLabel(status) {
+  const normalized = getStatusKey(status);
+  if (normalized === "archived") return "保管";
+  if (normalized === "published") return "公開";
+  return "下書き";
+}
+
+function getStatusKey(status) {
+  const normalized = String(status || "draft").trim().toLowerCase();
+  if (normalized === "archived" || normalized === "archive" || normalized === "保管") return "archived";
+  if (normalized === "published" || normalized === "publish" || normalized === "公開") return "published";
+  return "draft";
 }
 
 function fillForm(row) {
