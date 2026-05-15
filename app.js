@@ -1054,6 +1054,121 @@ function buildTrimLeadingZeroesCommand(query) {
   return commandCatalog.find((item) => item.id === "df-example-trim-leading-zeroes") || null;
 }
 
+function normalizeAsciiText(value) {
+  return String(value)
+    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stringToAsciiHex(value) {
+  return [...value].map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
+}
+
+function findPrefixText(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  const patterns = [
+    /(?:先頭|データ先頭)\s*(?:に|へ)?\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i,
+    /(?:文字列)\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:先頭|データ先頭).*(?:付加|追加|つける|付ける|挿入)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = asciiQuery.match(pattern);
+    if (match) return match[1];
+  }
+
+  return "";
+}
+
+function buildPrefixTextCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const prefixText = findPrefixText(query);
+  const mentionsOutput = /(出力|送信|表示|読み取り|読取)/.test(normalizedQuery);
+  if (!prefixText || !mentionsOutput) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const textLength = prefixText.length.toString().padStart(4, "0");
+  const textHex = stringToAsciiHex(prefixText);
+  const editorCommand = `BA${textLength}${textHex}F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-prefix-text-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${textHex}`,
+    label: `${codeLabel}・${lengthLabel} 先頭に${prefixText}を付加して出力`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、読み取りデータの先頭へ${prefixText}を付加して出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `BA${textLength}${textHex} は ${prefixText} を現在位置、つまりデータ先頭に挿入する指定です。`,
+      "F100 は挿入後に読み取りデータを全て出力する指定です。",
+    ],
+  };
+}
+
+function findInsertTextAtPosition(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  const patterns = [
+    /(\d{1,2})\s*桁目\s*(?:に|へ)?\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i,
+    /(?:文字列)\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(\d{1,2})\s*桁目\s*(?:に|へ).*(?:付加|追加|つける|付ける|挿入)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = asciiQuery.match(pattern);
+    if (!match) continue;
+    if (pattern === patterns[0]) {
+      return { position: Number(match[1]), text: match[2] };
+    }
+    return { position: Number(match[2]), text: match[1] };
+  }
+
+  return null;
+}
+
+function buildInsertTextAtPositionCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const insertion = findInsertTextAtPosition(query);
+  const mentionsOutput = /(出力|送信|表示|読み取り|読取)/.test(normalizedQuery);
+  if (!insertion || !mentionsOutput) return null;
+
+  const { position, text } = insertion;
+  if (!Number.isInteger(position) || position < 2 || position > 99) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const prefixCount = position - 1;
+  const prefixCountHex = prefixCount.toString().padStart(2, "0");
+  const textLength = text.length.toString().padStart(4, "0");
+  const textHex = stringToAsciiHex(text);
+  const editorCommand = `F2${prefixCountHex}00BA${textLength}${textHex}F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-insert-text-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${position}-${textHex}`,
+    label: `${codeLabel}・${lengthLabel} ${position}桁目に${text}を付加して出力`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、読み取りデータの${position}桁目に${text}を付加して出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `F2${prefixCountHex}00 は先頭${prefixCount}桁を出力し、カーソルを${position}桁目へ進める指定です。`,
+      `BA${textLength}${textHex} は ${text} を現在位置に挿入する指定です。`,
+      "F100 は挿入後に残りの読み取りデータを全て出力する指定です。",
+    ],
+  };
+}
+
 function findDelayCommand(query) {
   const normalizedQuery = normalizeText(query);
   return efDelayTable.find((item) => {
@@ -1559,6 +1674,17 @@ function describeEditorCommands(commandHex) {
       continue;
     }
 
+    if (code === "BA" && index + 6 <= commandHex.length) {
+      const count = Number(commandHex.slice(index + 2, index + 6));
+      const hexStart = index + 6;
+      const hexEnd = hexStart + count * 2;
+      const textHex = commandHex.slice(hexStart, hexEnd).toUpperCase();
+      const text = textHex.match(/.{2}/g)?.map((hex) => String.fromCharCode(parseInt(hex, 16))).join("") || textHex;
+      descriptions.push(`BA${commandHex.slice(index + 2, hexEnd)}: 現在位置に文字列 ${text} を挿入します。`);
+      index = hexEnd;
+      continue;
+    }
+
     if (code === "FB" && index + 4 <= commandHex.length) {
       const count = Number(commandHex.slice(index + 2, index + 4));
       const length = 4 + count * 2;
@@ -1920,6 +2046,8 @@ function answerQuestion(question) {
   const commandHtml = (item) => commandToHtml(applyClearSettingsPrefix(item, shouldClearSettings));
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
+  const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
+  const prefixTextCommand = buildPrefixTextCommand(question);
   const suffixB5Command = buildSuffixB5Command(question);
   const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
@@ -1940,6 +2068,16 @@ function answerQuestion(question) {
 
   if (trimLeadingZeroesCommand) {
     addMessage("bot", commandHtml(trimLeadingZeroesCommand), { html: true });
+    return;
+  }
+
+  if (insertTextAtPositionCommand) {
+    addMessage("bot", commandHtml(insertTextAtPositionCommand), { html: true });
+    return;
+  }
+
+  if (prefixTextCommand) {
+    addMessage("bot", commandHtml(prefixTextCommand), { html: true });
     return;
   }
 
