@@ -1861,6 +1861,19 @@ function renderAztecBarcodes(root = document) {
         context.clearRect(0, 0, canvas.width, canvas.height);
         context.drawImage(image, 0, 0);
         window.requestAnimationFrame(() => {
+          const messageScroller = canvas.closest(".messages");
+          if (messageScroller) {
+            const scrollerRect = messageScroller.getBoundingClientRect();
+            const canvasRect = canvas.getBoundingClientRect();
+            const canvasTop = canvasRect.top - scrollerRect.top + messageScroller.scrollTop;
+            const centeredTop = canvasTop - (messageScroller.clientHeight - canvas.offsetHeight) / 2;
+            messageScroller.scrollTo({
+              top: Math.max(0, centeredTop),
+              behavior: "smooth",
+            });
+            return;
+          }
+
           canvas.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
         });
         URL.revokeObjectURL(imageUrl);
