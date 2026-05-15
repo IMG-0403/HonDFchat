@@ -2100,7 +2100,6 @@ scannerMark?.addEventListener("click", () => {
 if (document.body.classList.contains("mobile-page")) {
   window.setTimeout(() => {
     input?.focus({ preventScroll: true });
-    form?.scrollIntoView({ block: "end", inline: "nearest" });
   }, 250);
 }
 
