@@ -1862,7 +1862,7 @@ function renderAztecBarcodes(root = document) {
         context.drawImage(image, 0, 0);
         window.requestAnimationFrame(() => {
           const messageScroller = canvas.closest(".messages");
-          if (messageScroller) {
+          if (messageScroller && messageScroller.scrollHeight > messageScroller.clientHeight + 2) {
             const scrollerRect = messageScroller.getBoundingClientRect();
             const canvasRect = canvas.getBoundingClientRect();
             const canvasTop = canvasRect.top - scrollerRect.top + messageScroller.scrollTop;
