@@ -731,7 +731,7 @@ h2 {
 
 .mobile-shell {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   width: min(100vw, 540px);
   height: 100vh;
   height: 100dvh;
@@ -779,7 +779,7 @@ h2 {
 }
 
 .mobile-chat {
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   border: 0;
   border-radius: 0;
@@ -853,7 +853,9 @@ h2 {
   grid-template-columns: minmax(0, 1fr) 46px;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  padding: 10px 14px;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.96);
 }
 
@@ -897,7 +899,7 @@ h2 {
   }
 
   .mobile-page .composer {
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    padding: 8px 10px;
   }
 }
 

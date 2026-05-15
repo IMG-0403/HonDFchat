@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>HON DATA FORMAT Mobile</title>
-    <link rel="stylesheet" href="styles.css?v=20260515-10" />
+    <link rel="stylesheet" href="styles.css?v=20260515-11" />
   </head>
   <body class="mobile-page">
     <main class="mobile-shell">
@@ -36,25 +36,25 @@
         </button>
       </section>
 
-      <section class="chat-area mobile-chat" aria-label="チャット">
-        <div class="messages" id="messages" role="log" aria-live="polite"></div>
+      <form class="composer mobile-composer" id="chatForm">
+        <label class="sr-only" for="messageInput">質問</label>
+        <input
+          id="messageInput"
+          autocomplete="off"
+          autofocus
+          inputmode="text"
+          placeholder="質問を入力"
+        />
+        <button class="send-button" type="submit" aria-label="送信" title="送信">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M22 2L11 13" />
+            <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+          </svg>
+        </button>
+      </form>
 
-        <form class="composer" id="chatForm">
-          <label class="sr-only" for="messageInput">質問</label>
-          <input
-            id="messageInput"
-            autocomplete="off"
-            autofocus
-            inputmode="text"
-            placeholder="質問を入力"
-          />
-          <button class="send-button" type="submit" aria-label="送信" title="送信">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M22 2L11 13" />
-              <path d="M22 2l-7 20-4-9-9-4 20-7z" />
-            </svg>
-          </button>
-        </form>
+      <section class="chat-area mobile-chat" aria-label="回答結果">
+        <div class="messages" id="messages" role="log" aria-live="polite"></div>
       </section>
     </main>
 
@@ -66,6 +66,6 @@
     </template>
 
     <script src="config.js"></script>
-    <script src="app.js?v=20260515-10"></script>
+    <script src="app.js?v=20260515-11"></script>
   </body>
 </html>
