@@ -944,7 +944,19 @@ function findDeleteTargetCharacters(query) {
     .map((value) => value.trim())
     .filter(Boolean);
 
-  return rawTargets.map(normalizeReplaceCharacter).filter(Boolean);
+  return rawTargets.flatMap(normalizeDeleteTargetCharacters).filter(Boolean);
+}
+
+function normalizeDeleteTargetCharacters(value) {
+  const normalizedChar = normalizeReplaceCharacter(value);
+  if (normalizedChar) return [normalizedChar];
+
+  const normalized = normalizeAsciiText(value);
+  if (/^[A-Za-z0-9]{2,15}$/.test(normalized)) {
+    return [...normalized];
+  }
+
+  return [];
 }
 
 function normalizeReplaceCharacter(value) {
