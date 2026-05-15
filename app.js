@@ -405,6 +405,10 @@ const b5KeyMapTable = [
   { key: "F10", hex: "79", aliases: ["ファンクション10"] },
   { key: "F11", hex: "7A", aliases: ["ファンクション11"] },
   { key: "F12", hex: "7B", aliases: ["ファンクション12"] },
+  { key: "左矢印", hex: "4F", aliases: ["左矢印", "左矢印キー", "left arrow", "arrow left"] },
+  { key: "右矢印", hex: "59", aliases: ["右矢印", "右矢印キー", "right arrow", "arrow right"] },
+  { key: "上矢印", hex: "53", aliases: ["上矢印", "上矢印キー", "up arrow", "arrow up"] },
+  { key: "下矢印", hex: "54", aliases: ["下矢印", "下矢印キー", "down arrow", "arrow down"] },
 ];
 
 const efDelayTable = [
@@ -1185,6 +1189,13 @@ function findB5KeyForAppend(query) {
   if (functionKeyMatch) {
     return b5KeyMapTable.find((item) => normalizeText(item.key) === `f${functionKeyMatch[1]}`) || null;
   }
+
+  const namedKey = b5KeyMapTable.find((item) => {
+    const key = normalizeText(item.key);
+    const aliases = (item.aliases || []).map(normalizeText);
+    return normalizedQuery.includes(key) || aliases.some((alias) => normalizedQuery.includes(alias));
+  });
+  if (namedKey) return namedKey;
 
   const letterMatch = normalizedQuery.match(/(?:^|[^a-z0-9])([a-z])(?:キー|key)?(?:を)?(?:付加|追加|つける|付ける|挿入)/);
   if (letterMatch) {
