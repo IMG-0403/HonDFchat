@@ -552,6 +552,17 @@ h2 {
   display: grid;
   grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
   gap: 16px;
+  min-height: 0;
+}
+
+.admin-content > .admin-card {
+  min-height: 0;
+}
+
+.admin-list-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: calc(100dvh - 150px);
 }
 
 .admin-form {
@@ -601,6 +612,9 @@ h2 {
 .admin-list {
   display: grid;
   gap: 10px;
+  min-height: 0;
+  padding-right: 4px;
+  overflow: auto;
 }
 
 .admin-list-item {
