@@ -701,7 +701,14 @@ function parseStructuredNlpRequest(query) {
   } else {
     const deleteChars = findDeleteTargetCharacters(query);
     const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
-    if (mentionsDelete && deleteChars.length > 0) {
+    const deleteFromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+    if (mentionsDelete && deleteChars.length > 0 && deleteFromMatch) {
+      structured.operation = {
+        type: "deleteFromPositionToEnd",
+        chars: deleteChars,
+        startPosition: Number(deleteFromMatch[1]),
+      };
+    } else if (mentionsDelete && deleteChars.length > 0) {
       structured.operation = { type: "delete", chars: deleteChars };
     }
   }
@@ -754,7 +761,11 @@ function buildCanonicalQueryFromStructuredNlp(structured) {
   const operation = structured.operation;
 
   if (operation.type === "delete") {
-    return `${scopeText} ${operation.chars.map(characterToRequestToken).join("と")}削除`;
+    return `${scopeText} ${operation.chars.map(characterToRequestToken).join("と")}を削除`;
+  }
+
+  if (operation.type === "deleteFromPositionToEnd") {
+    return `${scopeText} ${operation.chars.map(characterToRequestToken).join("と")}を削除して${operation.startPosition}桁目以降出力`;
   }
 
   if (operation.type === "replace") {
@@ -798,6 +809,7 @@ function buildCommandFromStructuredNlp(question) {
     buildReplaceThenRangeCommand,
     buildTrimLeadingZeroesCommand,
     findExactSpaceTransformCommand,
+    buildDeleteThenFromPositionToEndCommand,
     findExactDeleteCharacterCommand,
     buildRangeCharactersCommand,
     buildFromPositionToEndCommand,
@@ -1103,11 +1115,22 @@ function findDeleteTargetCharacters(query) {
   const targetMatch = normalizedCaseQuery.match(/(.+?)\s*(?:を)?\s*(?:削除|除去|消す|消して)/i);
   if (!targetMatch) return [];
 
-  const targetText = targetMatch[1]
+  let targetText = targetMatch[1]
     .replace(/^(?:.*?時|.*?場合|.*?とき)\s*/i, "")
     .replace(/^(?:.*?読み取りで|.*?読取で|.*?読み取り時に|.*?読取時に)\s*/i, "")
     .replace(/^(?:に|、|,|\s)+/, "")
+    .replace(/を$/, "")
     .trim();
+  const symbologyNamesForDelete = symbologyCodeTable
+    .flatMap((item) => [item.label, ...(item.aliases || [])])
+    .map(normalizeText)
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  const normalizedTargetText = normalizeText(targetText);
+  const leadingSymbology = symbologyNamesForDelete.find((name) => normalizedTargetText.startsWith(name));
+  if (leadingSymbology) {
+    targetText = targetText.slice(leadingSymbology.length).replace(/^(?:の|で|を|、|,|\s)+/, "").trim();
+  }
   const rawTargets = targetText
     .split(/\s*(?:と|、|,|，|\/|\+|&|and)\s*/i)
     .map((value) => value.trim())
@@ -1562,6 +1585,54 @@ function buildDeleteThenRangeCommand(query) {
       `FB${suppressCount}${targetHex} は ${targetLabel} を削除する指定です。`,
       "F7 は削除後にカーソルを先頭へ戻す指定です。",
       `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F2${countHex}00 でそこから${characterCount}桁を送信します。`,
+    ],
+  };
+}
+
+function buildDeleteThenFromPositionToEndCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const fromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+  const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
+
+  if (!fromMatch || !mentionsDelete || !/(出力|送信|表示|取り出|切り出|ください)/.test(normalizedQuery)) return null;
+
+  const targetChars = findDeleteTargetCharacters(query);
+  const startPosition = Number(fromMatch[1]);
+  if (
+    targetChars.length === 0 ||
+    !Number.isInteger(startPosition) ||
+    startPosition < 1 ||
+    startPosition > 99
+  ) {
+    return null;
+  }
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const targetHex = targetChars.map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
+  const suppressCount = targetChars.length.toString().padStart(2, "0");
+  const targetLabel = targetChars.map(describeReplaceCharacter).join("と");
+  const cursorMove = startPosition - 1;
+  const cursorHex = cursorMove.toString().padStart(2, "0");
+  const editorCommand = `FB${suppressCount}${targetHex}F7F5${cursorHex}F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-delete-${targetHex}-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-from-${cursorHex}-to-end`,
+    label: `${codeLabel}・${lengthLabel} ${targetLabel}を削除後 ${startPosition}桁目以降を出力`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、${targetLabel}を削除してから${startPosition}桁目以降を出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    notes: [
+      `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `FB${suppressCount}${targetHex} は ${targetLabel} を削除する指定です。`,
+      "F7 は削除後にカーソルを先頭へ戻す指定です。",
+      `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F100 でそこから末尾まで送信します。`,
     ],
   };
 }
@@ -2321,6 +2392,7 @@ function answerQuestion(question) {
   const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
+  const deleteThenFromPositionToEndCommand = buildDeleteThenFromPositionToEndCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
   const generatedRangeCommand = buildRangeCharactersCommand(question);
   const fromPositionToEndCommand = buildFromPositionToEndCommand(question);
@@ -2362,6 +2434,11 @@ function answerQuestion(question) {
 
   if (deleteThenRangeCommand) {
     addMessage("bot", commandHtml(deleteThenRangeCommand), { html: true });
+    return;
+  }
+
+  if (deleteThenFromPositionToEndCommand) {
+    addMessage("bot", commandHtml(deleteThenFromPositionToEndCommand), { html: true });
     return;
   }
 
