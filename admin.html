@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>HON DATA FORMAT Admin</title>
-    <link rel="stylesheet" href="styles.css?v=20260515-25" />
+    <link rel="stylesheet" href="styles.css?v=20260515-30" />
   </head>
   <body class="admin-page">
     <main class="admin-shell">
@@ -44,10 +44,7 @@
           </div>
           <form class="admin-form" id="requestForm">
             <input id="recordId" type="hidden" />
-            <label>
-              タイトル
-              <input id="titleInput" autocomplete="off" placeholder="例: QR10桁と20桁 3桁目から5桁出力" />
-            </label>
+            <input id="titleInput" type="hidden" />
             <label>
               依頼設定内容
               <textarea id="requestTextInput" rows="4" required placeholder="例: QR10桁と20桁読み取り時に3桁目から5桁出力"></textarea>
@@ -56,10 +53,7 @@
               設定コマンド
               <textarea id="commandInput" rows="3" required placeholder="例: DFMBK30099730010F502F20500|0099730020F502F20500."></textarea>
             </label>
-            <label>
-              キーワード
-              <input id="keywordsInput" autocomplete="off" placeholder="例: QR, 10桁, 20桁, 3桁目" />
-            </label>
+            <input id="keywordsInput" type="hidden" />
             <label>
               備考
               <textarea id="notesInput" rows="3"></textarea>
@@ -92,6 +86,6 @@
     </main>
 
     <script src="config.js"></script>
-    <script type="module" src="admin.js?v=20260515-25"></script>
+    <script type="module" src="admin.js?v=20260515-30"></script>
   </body>
 </html>
