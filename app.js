@@ -822,7 +822,7 @@ function buildCommandFromStructuredNlp(question) {
       return {
         ...command,
         notes: [
-          `NLP解析: ${structured.operation.type} / 対象 ${symbologyTargetsToText(structured.symbologyTargets) || "全コード種"} / 桁数 ${readLengthsToText(structured.readLengths) || "全桁数"}`,
+          ...buildNlpDecisionSteps(structured),
           ...(command.notes || []),
         ],
       };
@@ -830,6 +830,57 @@ function buildCommandFromStructuredNlp(question) {
   }
 
   return null;
+}
+
+function buildNlpDecisionSteps(structured) {
+  const operation = structured.operation;
+  const steps = [
+    `判断1: コード種は ${symbologyTargetsToText(structured.symbologyTargets) || "全コード種"} と判断しました。`,
+    `判断2: 桁数条件は ${readLengthsToText(structured.readLengths) || "全桁数"} と判断しました。`,
+    `判断3: 処理内容は ${getOperationLabel(operation)} と判断しました。`,
+  ];
+
+  const targetText = getOperationTargetLabel(operation);
+  if (targetText) {
+    steps.push(`判断4: 処理対象は ${targetText} と判断しました。`);
+  }
+
+  steps.push(`判断5: 標準化した依頼文「${structured.canonicalQuery}」を既存ロジックに渡してコマンド生成しました。`);
+  return steps;
+}
+
+function getOperationLabel(operation) {
+  if (!operation) return "未分類";
+  const labels = {
+    delete: "削除",
+    deleteFromPositionToEnd: "削除後の指定桁以降出力",
+    replace: "置換",
+    range: "指定範囲出力",
+    fromPositionToEnd: "指定桁以降出力",
+    leading: "先頭桁数出力",
+    zeroSuppress: "0サプレス",
+  };
+  return labels[operation.type] || operation.type;
+}
+
+function getOperationTargetLabel(operation) {
+  if (!operation) return "";
+  if (operation.type === "delete" || operation.type === "deleteFromPositionToEnd") {
+    return operation.chars.map(describeReplaceCharacter).join("と");
+  }
+  if (operation.type === "replace") {
+    return `${describeReplaceCharacter(operation.sourceChar)} から ${describeReplaceCharacter(operation.targetChar)}`;
+  }
+  if (operation.type === "range") {
+    return operation.ranges.map((range) => `${range.startPosition}桁目から${range.characterCount}桁`).join("と");
+  }
+  if (operation.type === "fromPositionToEnd") {
+    return `${operation.startPosition}桁目以降`;
+  }
+  if (operation.type === "leading") {
+    return `先頭${operation.characterCount}桁`;
+  }
+  return "";
 }
 
 function buildLeadingCharactersCommand(query) {
@@ -1035,7 +1086,7 @@ function findReplaceCharacters(query) {
     .replace(/\s+/g, " ")
     .trim();
   const transformMatch = normalizedCaseQuery.match(
-    /([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus)\s*を\s*([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus)\s*(?:に|へ)?\s*(?:置換|置き換え|置き換えて|変換)/i
+    /([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ)\s*を\s*([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ)\s*(?:に|へ)?\s*(?:置換|置き換え|置き換えて|変換)/i
   );
 
   if (!transformMatch) return null;
@@ -1159,6 +1210,7 @@ function normalizeReplaceCharacter(value) {
   if (["ピリオド", "ドット", "period", "dot"].includes(lowered)) return ".";
   if (["ハイフン", "hyphen", "マイナス", "minus"].includes(lowered)) return "-";
   if (["カンマ", "comma"].includes(lowered)) return ",";
+  if (["gs", "gsコード", "gsキャラクタ", "gsキャラクター", "group separator", "グループセパレータ"].includes(lowered)) return "\x1D";
   if (normalized.length === 1 && normalized >= "!" && normalized <= "~") return normalized;
   return null;
 }
@@ -1169,6 +1221,7 @@ function describeReplaceCharacter(char) {
   if (char === ".") return ".(ピリオド)";
   if (char === "-") return "-(ハイフン)";
   if (char === ",") return ",(カンマ)";
+  if (char === "\x1D") return "GSキャラクタ";
   return char;
 }
 
