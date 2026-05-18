@@ -286,7 +286,7 @@ const functionCodeTable = [
   { code: "ENQ", hex: "05" },
   { code: "ACK", hex: "06" },
   { code: "BEL", hex: "07" },
-  { code: "BS", hex: "08" },
+  { code: "BS", hex: "08", aliases: ["backspace", "バックスペース"] },
   { code: "HT", display: "HT (TAB)", hex: "09", aliases: ["tab", "タブ"] },
   { code: "LF", hex: "0A" },
   { code: "VT", hex: "0B" },
@@ -305,7 +305,7 @@ const functionCodeTable = [
   { code: "CAN", hex: "18" },
   { code: "EM", hex: "19" },
   { code: "SUB", hex: "1A" },
-  { code: "ESC", hex: "1B" },
+  { code: "ESC", hex: "1B", aliases: ["escape", "エスケープ"] },
   { code: "FS", hex: "1C" },
   { code: "GS", hex: "1D", aliases: ["gsコード", "gsキャラクター", "group separator", "グループセパレータ"] },
   { code: "RS", hex: "1E" },
@@ -655,6 +655,16 @@ function getReadLengths(normalizedQuery) {
   for (const symbologyName of symbologyNames) {
     const inlineLengthPattern = new RegExp(`${escapeRegExp(symbologyName)}\\s*(?:の|で|を|:|：)?\\s*(\\d{1,4})\\s*桁\\s*(?:読み取り|読取|バーコード|コード)?`, "g");
     while ((match = inlineLengthPattern.exec(normalizedQuery)) !== null) {
+      lengths.push(Number(match[1]));
+    }
+  }
+
+  const explicitLengthPatterns = [
+    /(?:桁数|読取桁数|読み取り桁数|長さ|length)\s*(?:指定|条件)?\s*[:：]?\s*(\d{1,4})\s*桁/g,
+    /(\d{1,4})\s*桁\s*(?:指定|の指定|条件)/g,
+  ];
+  for (const pattern of explicitLengthPatterns) {
+    while ((match = pattern.exec(normalizedQuery)) !== null) {
       lengths.push(Number(match[1]));
     }
   }
@@ -1049,6 +1059,57 @@ function characterToRequestToken(char) {
   if (char === "-") return "ハイフン";
   if (char === ",") return "カンマ";
   return char;
+}
+
+function findUntilCharacter(query) {
+  const normalizedCaseQuery = query
+    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\s+/g, " ")
+    .trim();
+  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const patterns = [
+    new RegExp(`(${tokenPattern})\\s*まで\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
+    new RegExp(`(${tokenPattern})\\s*手前\\s*まで\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalizedCaseQuery.match(pattern);
+    if (!match) continue;
+    const char = normalizeReplaceCharacter(match[1]);
+    if (char) return char;
+  }
+
+  return null;
+}
+
+function buildUntilCharacterCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const untilChar = findUntilCharacter(query);
+  if (!untilChar) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const targetHex = untilChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const targetLabel = describeReplaceCharacter(untilChar);
+  const editorCommand = `F3${targetHex}00`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-until-${targetHex}-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
+    label: `${codeLabel}・${lengthLabel} ${targetLabel}までデータ出力`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、読み取りデータの現在位置から${targetLabel}の手前までを出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `F3${targetHex}00 は現在位置から ${targetLabel} が出現する手前までを送信し、追加文字なしで出力する指定です。`,
+    ],
+  };
 }
 
 function buildCommandFromStructuredNlp(question, intentUnderstanding = buildIntentUnderstanding(question)) {
@@ -1696,6 +1757,112 @@ function normalizeAsciiText(value) {
 
 function stringToAsciiHex(value) {
   return [...value].map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
+}
+
+function normalizeInsertControlToken(value) {
+  const normalized = normalizeText(value);
+  if (["tab", "タブ", "ht"].includes(normalized)) return { label: "TAB", hex: "09" };
+  if (["cr", "enter", "エンター"].includes(normalized)) return { label: "ENTER", hex: "0D" };
+  if (["sp", "space", "スペース", "空白"].includes(normalized)) return { label: "スペース", hex: "20" };
+  if (["esc", "escape", "エスケープ"].includes(normalized)) return { label: "ESC", hex: "1B" };
+  if (["bs", "backspace", "バックスペース"].includes(normalized)) return { label: "BS", hex: "08" };
+  const functionCode = functionCodeTable.find((item) => {
+    const code = normalizeText(item.code);
+    const display = normalizeText(item.display || "");
+    const aliases = (item.aliases || []).map(normalizeText);
+    return normalized === code || normalized === display || aliases.includes(normalized);
+  });
+  if (functionCode) return { label: functionCode.display || functionCode.code, hex: functionCode.hex };
+  const characterCode = normalizeReplaceCharacter(value);
+  if (characterCode) {
+    return {
+      label: describeReplaceCharacter(characterCode),
+      hex: characterCode.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0"),
+    };
+  }
+  return null;
+}
+
+function findMultiPositionControlInsertions(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const pattern = new RegExp(`(\\d{1,2})\\s*桁目\\s*(?:に|へ)?\\s*(${tokenPattern})\\s*(?:を)?\\s*(?:(\\d{1,2})\\s*個)?\\s*(?:付加|追加|つける|付ける|挿入)?`, "gi");
+  const insertions = [];
+  let match;
+
+  while ((match = pattern.exec(asciiQuery)) !== null) {
+    const control = normalizeInsertControlToken(match[2]);
+    if (!control) continue;
+    insertions.push({ position: Number(match[1]), count: Number(match[3] || 1), ...control });
+  }
+
+  const uniqueInsertions = [];
+  const seen = new Set();
+  insertions
+    .filter((item) => Number.isInteger(item.position) && item.position >= 2 && item.position <= 99)
+    .sort((a, b) => a.position - b.position)
+    .forEach((item) => {
+      const key = `${item.position}-${item.hex}-${item.count}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      uniqueInsertions.push(item);
+    });
+
+  return uniqueInsertions;
+}
+
+function buildMultiPositionControlInsertCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const insertions = findMultiPositionControlInsertions(query);
+  const mentionsOutput = /(出力|送信|表示|読み取り|読取)/.test(normalizedQuery);
+  if (insertions.length < 2 && !insertions.some((item) => item.count > 1)) return null;
+  if (!mentionsOutput) return null;
+
+  let cursorPosition = 1;
+  const commandParts = [];
+  const notes = [];
+  for (const insertion of insertions) {
+    const sendCount = insertion.position - cursorPosition;
+    if (sendCount < 0 || sendCount > 99) return null;
+    const sendCountHex = sendCount.toString().padStart(2, "0");
+    if (insertion.count > 1) {
+      commandParts.push(`F2${sendCountHex}00F4${insertion.hex}${String(insertion.count).padStart(2, "0")}`);
+    } else {
+      commandParts.push(`F2${sendCountHex}${insertion.hex}`);
+    }
+    notes.push(`${insertion.position}桁目に${insertion.label}${insertion.count > 1 ? `${insertion.count}個` : ""}`);
+    cursorPosition = insertion.position + insertion.count;
+  }
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const editorCommand = `${commandParts.join("")}F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-multi-control-insert-${insertions.map((item) => `${item.position}-${item.hex}`).join("-")}`,
+    label: `${codeLabel}・${lengthLabel} ${notes.join("、")}を付加して出力`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、読み取りデータの${notes.join("、")}を付加して出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      ...insertions.map((item, index) => {
+        const previousPosition = index === 0 ? 1 : insertions[index - 1].position + insertions[index - 1].count;
+        const sendCount = item.position - previousPosition;
+        if (item.count > 1) {
+          return `F2${String(sendCount).padStart(2, "0")}00 で現在位置から${sendCount}桁を出力し、F4${item.hex}${String(item.count).padStart(2, "0")} で${item.label}を${item.count}個付加します。`;
+        }
+        return `F2${String(sendCount).padStart(2, "0")}${item.hex} は現在位置から${sendCount}桁を出力し、${item.label}を付加する指定です。`;
+      }),
+      "F100 は最後の付加後に残りの読み取りデータを全て出力する指定です。",
+    ],
+  };
 }
 
 function hasPlainTextAppendTarget(query) {
@@ -2945,6 +3112,7 @@ function answerQuestion(question) {
   const structuredNlpCommand = buildCommandFromStructuredNlp(question, intentUnderstanding);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
+  const multiPositionControlInsertCommand = buildMultiPositionControlInsertCommand(question);
   const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
   const prefixB5Command = buildPrefixB5Command(question);
   const prefixTextCommand = buildPrefixTextCommand(question);
@@ -2954,6 +3122,7 @@ function answerQuestion(question) {
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const deleteThenFromPositionToEndCommand = buildDeleteThenFromPositionToEndCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
+  const untilCharacterCommand = buildUntilCharacterCommand(question);
   const generatedRangeCommand = buildRangeCharactersCommand(question);
   const fromPositionToEndCommand = buildFromPositionToEndCommand(question);
   const generatedLeadingCommand = buildLeadingCharactersCommand(question);
@@ -2974,6 +3143,11 @@ function answerQuestion(question) {
 
   if (trimLeadingZeroesCommand) {
     addBotResponse(question, commandHtml(trimLeadingZeroesCommand), { html: true });
+    return;
+  }
+
+  if (multiPositionControlInsertCommand) {
+    addBotResponse(question, commandHtml(multiPositionControlInsertCommand), { html: true });
     return;
   }
 
@@ -3019,6 +3193,11 @@ function answerQuestion(question) {
 
   if (exactDeleteCommand) {
     addBotResponse(question, commandHtml(exactDeleteCommand), { html: true });
+    return;
+  }
+
+  if (untilCharacterCommand) {
+    addBotResponse(question, commandHtml(untilCharacterCommand), { html: true });
     return;
   }
 
