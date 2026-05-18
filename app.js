@@ -870,35 +870,36 @@ function buildIntentActions(operation) {
 function buildCanonicalQueryFromStructuredNlp(structured) {
   const targetText = symbologyTargetsToText(structured.symbologyTargets);
   const lengthText = readLengthsToText(structured.readLengths);
-  const scopeText = `${targetText}${lengthText}` || "データ";
+  const scopeText = `${targetText}${lengthText}`;
+  const scopePrefix = scopeText ? `${scopeText} ` : "";
   const operation = structured.operation;
 
   if (operation.type === "delete") {
-    return `${scopeText} ${operation.chars.map(characterToRequestToken).join("と")}を削除`;
+    return `${scopePrefix}${operation.chars.map(characterToRequestToken).join("と")}を削除`;
   }
 
   if (operation.type === "deleteFromPositionToEnd") {
-    return `${scopeText} ${operation.chars.map(characterToRequestToken).join("と")}を削除して${operation.startPosition}桁目以降出力`;
+    return `${scopePrefix}${operation.chars.map(characterToRequestToken).join("と")}を削除して${operation.startPosition}桁目以降出力`;
   }
 
   if (operation.type === "replace") {
-    return `${scopeText} ${characterToRequestToken(operation.sourceChar)}を${characterToRequestToken(operation.targetChar)}に置換`;
+    return `${scopePrefix}${characterToRequestToken(operation.sourceChar)}を${characterToRequestToken(operation.targetChar)}に置換`;
   }
 
   if (operation.type === "range") {
-    return `${scopeText} ${operation.ranges.map((range) => `${range.startPosition}桁目から${range.characterCount}桁`).join("と")}出力`;
+    return `${scopePrefix}${operation.ranges.map((range) => `${range.startPosition}桁目から${range.characterCount}桁`).join("と")}出力`;
   }
 
   if (operation.type === "fromPositionToEnd") {
-    return `${scopeText} ${operation.startPosition}桁目から出力`;
+    return `${scopePrefix}${operation.startPosition}桁目から出力`;
   }
 
   if (operation.type === "leading") {
-    return `${scopeText} 先頭${operation.characterCount}桁出力`;
+    return `${scopePrefix}先頭${operation.characterCount}桁出力`;
   }
 
   if (operation.type === "zeroSuppress") {
-    return `${scopeText} 0サプレス`;
+    return `${scopePrefix}0サプレス`;
   }
 
   return structured.original;
