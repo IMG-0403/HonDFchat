@@ -579,6 +579,7 @@ function scoreCommand(query, item) {
 
   item.keywords.forEach((keyword) => {
     const normalizedKeyword = normalizeText(keyword);
+    if (/^[a-z0-9]$/i.test(normalizedKeyword)) return;
     if (normalizedQuery.includes(normalizedKeyword)) {
       score += normalizedKeyword.length > 3 ? 3 : 2;
     }
