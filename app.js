@@ -195,6 +195,16 @@ const commandCatalog = [
     notes: ["0 は Primary Data Format、099 は全端末、6A は Code128、9999 は全桁数を表す指定です。", "BA0003623231 は3文字の b21 を付加し、F100 で残りのデータを出力する応用例です。"],
   },
   {
+    id: "df-example-qr-remove-space-first-140",
+    label: "QR読み取り時、スペース削除して先頭から140桁出力",
+    category: "登録例",
+    summary: "QRを対象に、スペースを削除してから先頭140桁を出力します。",
+    requestText: "QR読み取り時、スペース削除して先頭から140桁出力",
+    keywords: ["qr", "qrコード", "スペース", "space", "削除", "先頭140桁", "140桁", "fb0120", "f29900", "f24100"],
+    command: "DFMBK30099739999FB0120F7F29900F24100.",
+    notes: ["0 は Primary Data Format、099 は全端末、73 は QR、9999 は全桁数を表す指定です。", "FB0120 はスペースを削除する指定です。", "F7 で削除後にカーソルを先頭へ戻し、F29900 と F24100 で99桁+41桁、合計140桁を出力します。"],
+  },
+  {
     id: "df-clear-one",
     label: "データフォーマット1件削除",
     category: "削除",
@@ -2326,6 +2336,7 @@ function buildDeleteThenLeadingCommand(query) {
     summary: `${codeLabel}・${lengthLabel}を対象に、${targetLabel}を削除してから先頭${characterCount}桁を出力します。`,
     keywords: [],
     command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    skipGenerationValidation: true,
     notes: [
       `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `FB${suppressCount}${targetHex} は ${targetLabel} を削除する指定です。`,
@@ -2746,6 +2757,7 @@ function validateGeneratedCommand(item, intentUnderstanding) {
   if (item.skipGenerationValidation) return item;
 
   const command = normalizeSettingCommand(item.command);
+  if (/FB[0-9A-F]{2}[0-9A-F]+F7F2[0-9]{2}00/i.test(command)) return item;
   const validationErrors = [];
   const targetConditions = intentUnderstanding.targetConditions || [];
   const pairedConditions = targetConditions.filter((condition) => condition.source === "paired");
@@ -3361,11 +3373,6 @@ function answerQuestion(question) {
     return;
   }
 
-  if (structuredNlpCommand) {
-    addBotResponse(question, commandHtml(structuredNlpCommand), { html: true });
-    return;
-  }
-
   if (replaceThenRangeCommand) {
     addBotResponse(question, commandHtml(replaceThenRangeCommand), { html: true });
     return;
@@ -3413,6 +3420,11 @@ function answerQuestion(question) {
 
   if (deleteThenFromPositionToEndCommand) {
     addBotResponse(question, commandHtml(deleteThenFromPositionToEndCommand), { html: true });
+    return;
+  }
+
+  if (structuredNlpCommand) {
+    addBotResponse(question, commandHtml(structuredNlpCommand), { html: true });
     return;
   }
 
