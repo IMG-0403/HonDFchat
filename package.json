@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "test": "node --test tests/intent-command.test.js"
+  },
+  "devDependencies": {
+    "supabase": "^2.98.2"
+  }
+}

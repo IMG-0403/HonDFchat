@@ -653,7 +653,7 @@ function getReadLengths(normalizedQuery) {
     .sort((a, b) => b.length - a.length);
 
   for (const symbologyName of symbologyNames) {
-    const inlineLengthPattern = new RegExp(`${escapeRegExp(symbologyName)}\\s*(\\d{1,4})\\s*桁\\s*(?:読み取り|読取|バーコード|コード)`, "g");
+    const inlineLengthPattern = new RegExp(`${escapeRegExp(symbologyName)}\\s*(?:の|で|を|:|：)?\\s*(\\d{1,4})\\s*桁\\s*(?:読み取り|読取|バーコード|コード)?`, "g");
     while ((match = inlineLengthPattern.exec(normalizedQuery)) !== null) {
       lengths.push(Number(match[1]));
     }
@@ -662,10 +662,88 @@ function getReadLengths(normalizedQuery) {
   return [...new Set(lengths.filter((length) => Number.isInteger(length) && length >= 0 && length <= 9999))];
 }
 
+function getSymbologyLengthPairs(normalizedQuery) {
+  const names = symbologyCodeTable
+    .filter((item) => item.codeId !== "99")
+    .flatMap((item) => [item.label, item.codeId, ...(item.aliases || [])].map((name) => ({
+      target: item,
+      name: normalizeText(name),
+    })))
+    .filter((entry) => entry.name)
+    .sort((a, b) => b.name.length - a.name.length);
+  const pairs = [];
+
+  names.forEach((entry) => {
+    const pattern = new RegExp(`${escapeRegExp(entry.name)}\\s*(?:の|で|を|:|：)?\\s*(\\d{1,4})\\s*桁`, "g");
+    let match;
+    while ((match = pattern.exec(normalizedQuery)) !== null) {
+      const length = Number(match[1]);
+      if (!Number.isInteger(length) || length < 0 || length > 9999) continue;
+      pairs.push({
+        index: match.index,
+        target: entry.target,
+        length,
+      });
+    }
+  });
+
+  const uniquePairs = [];
+  const seen = new Set();
+  pairs
+    .sort((a, b) => a.index - b.index || b.target.label.length - a.target.label.length)
+    .forEach((pair) => {
+      const key = `${pair.index}-${pair.target.codeId}-${pair.length}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      uniquePairs.push(pair);
+    });
+
+  return uniquePairs.map((pair) => ({ target: pair.target, length: pair.length }));
+}
+
 function buildTargetBlocks(symbologyTargets, readLengths, editorCommand) {
   const lengthFields = readLengths.length > 0 ? readLengths.map((length) => String(length).padStart(4, "0")) : ["9999"];
   return symbologyTargets.flatMap((target) =>
     lengthFields.map((lengthField) => `0099${target.codeId}${lengthField}${editorCommand}`)
+  );
+}
+
+function buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand) {
+  const pairs = getSymbologyLengthPairs(normalizedQuery);
+  if (pairs.length < 2) return buildTargetBlocks(symbologyTargets, readLengths, editorCommand);
+
+  return pairs.map((pair) => `0099${pair.target.codeId}${String(pair.length).padStart(4, "0")}${editorCommand}`);
+}
+
+function buildDataFormatCommandFromIntentConditions(query, editorCommand) {
+  const conditions = buildTargetConditions(normalizeText(query));
+  const blocks = conditions.map((condition) => `0099${condition.codeId}${condition.lengthField}${editorCommand}`);
+  return buildDataFormatCommandFromBlocks(blocks);
+}
+
+function buildTargetConditions(normalizedQuery) {
+  const pairedConditions = getSymbologyLengthPairs(normalizedQuery);
+  if (pairedConditions.length >= 2) {
+    return pairedConditions.map((pair) => ({
+      codeId: pair.target.codeId,
+      label: pair.target.label,
+      length: pair.length,
+      lengthField: String(pair.length).padStart(4, "0"),
+      source: "paired",
+    }));
+  }
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const lengths = readLengths.length > 0 ? readLengths : [9999];
+  return symbologyTargets.flatMap((target) =>
+    lengths.map((length) => ({
+      codeId: target.codeId,
+      label: target.label,
+      length,
+      lengthField: String(length).padStart(4, "0"),
+      source: readLengths.length > 0 ? "explicit" : "default",
+    }))
   );
 }
 
@@ -760,15 +838,17 @@ function buildIntentUnderstanding(question) {
   const normalizedQuery = normalizeText(question);
   const structured = parseStructuredNlpRequest(question);
   const looksLikeDataFormat = looksLikeDataFormatRequest(normalizedQuery);
+  const commonIntent = buildCommonCommandIntent(question, structured);
 
-  if (!structured) {
+  if (!structured && commonIntent.actions.length === 0) {
     return {
       intent: looksLikeDataFormat ? "data_format_setting" : "unknown",
       confidence: looksLikeDataFormat ? 0.35 : 0.1,
       contextSources: buildIntentContextSources(),
       clearBeforeApply: shouldClearSettingsBeforeCommand(question),
-      symbologies: [],
-      readLengths: [],
+      targetConditions: commonIntent.targetConditions,
+      symbologies: commonIntent.symbologies,
+      readLengths: commonIntent.readLengths,
       actions: [],
       missingSlots: looksLikeDataFormat ? ["operation"] : ["intent"],
       canonicalQuery: "",
@@ -778,16 +858,21 @@ function buildIntentUnderstanding(question) {
   }
 
   const missingSlots = [];
-  const operation = structured.operation;
+  const operation = structured?.operation || null;
   if (!operation) missingSlots.push("operation");
-  if (!hasOperationTarget(operation)) missingSlots.push("target");
+  if (operation && !hasOperationTarget(operation)) missingSlots.push("target");
+  if (commonIntent.actions.length > 0) {
+    const operationIndex = missingSlots.indexOf("operation");
+    if (operationIndex >= 0) missingSlots.splice(operationIndex, 1);
+  }
 
-  const hasSpecificSymbology = structured.symbologyTargets.some((target) => target.codeId !== "99");
+  const hasSpecificSymbology = commonIntent.targetConditions.some((target) => target.codeId !== "99");
   let confidence = 0.58;
-  if (operation) confidence += 0.22;
-  if (hasOperationTarget(operation)) confidence += 0.08;
+  if (operation || commonIntent.actions.length > 0) confidence += 0.22;
+  if ((operation && hasOperationTarget(operation)) || commonIntent.actions.length > 0) confidence += 0.08;
   if (hasSpecificSymbology) confidence += 0.06;
-  if (structured.readLengths.length > 0) confidence += 0.03;
+  if (commonIntent.readLengths.length > 0) confidence += 0.03;
+  if (commonIntent.targetConditions.some((target) => target.source === "paired")) confidence += 0.04;
   if (missingSlots.length > 0) confidence -= 0.2;
   confidence = Math.max(0.1, Math.min(0.98, confidence));
 
@@ -796,17 +881,63 @@ function buildIntentUnderstanding(question) {
     confidence,
     contextSources: buildIntentContextSources(),
     clearBeforeApply: shouldClearSettingsBeforeCommand(question),
-    symbologies: structured.symbologyTargets.map((target) => ({
-      label: target.label,
-      codeId: target.codeId,
-      explicit: target.codeId !== "99",
-    })),
-    readLengths: structured.readLengths,
-    actions: buildIntentActions(operation),
+    targetConditions: commonIntent.targetConditions,
+    symbologies: commonIntent.symbologies,
+    readLengths: commonIntent.readLengths,
+    actions: commonIntent.actions.length > 0 ? commonIntent.actions : buildIntentActions(operation),
     missingSlots,
-    canonicalQuery: structured.canonicalQuery,
+    canonicalQuery: structured?.canonicalQuery || "",
     structured,
     original: question,
+  };
+}
+
+function buildCommonCommandIntent(question, structured = null) {
+  const normalizedQuery = normalizeText(question);
+  const targetConditions = buildTargetConditions(normalizedQuery);
+  const symbologies = [...new Map(targetConditions.map((condition) => [condition.codeId, {
+    label: condition.label,
+    codeId: condition.codeId,
+    explicit: condition.codeId !== "99",
+  }])).values()];
+  const readLengths = [...new Set(targetConditions
+    .filter((condition) => condition.length !== 9999 || condition.source !== "default")
+    .map((condition) => condition.length))];
+  const actions = [];
+  const b5Action = buildB5AppendIntentAction(question);
+  if (b5Action) actions.push(b5Action);
+  if (actions.length === 0 && structured?.operation) actions.push(...buildIntentActions(structured.operation));
+
+  return {
+    targetConditions,
+    symbologies,
+    readLengths,
+    actions,
+  };
+}
+
+function buildB5AppendIntentAction(query) {
+  const normalizedQuery = normalizeText(query);
+  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+  if (!mentionsAppend) return null;
+  if (hasPlainTextAppendTarget(query)) return null;
+
+  const mentionsPrefix = ["先頭", "前", "最初", "プリフィックス", "prefix"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsSuffix = ["末尾", "後ろ", "最後", "サフィックス", "suffix"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  if (!mentionsPrefix && !mentionsSuffix) return null;
+
+  const key = findB5KeyForAppend(query);
+  const modifier = getB5ModifierForAppend(query);
+  const mentionsModifier = ["ctrl", "control", "コントロール", "alt", "shift"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  if (!key && !mentionsModifier) return null;
+
+  const keystrokeCommand = key ? `B501${modifier.hex}${key.hex}` : "B5012040";
+  return {
+    type: mentionsPrefix ? "prefix_key" : "suffix_key",
+    command: keystrokeCommand,
+    modifierHex: key ? modifier.hex : "20",
+    keyHex: key ? key.hex : "40",
+    label: key ? `${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key}` : "CTRL",
   };
 }
 
@@ -837,11 +968,11 @@ function hasOperationTarget(operation) {
 function buildIntentActions(operation) {
   if (!operation) return [];
   if (operation.type === "delete") {
-    return [{ type: "delete", targets: operation.chars.map(characterToRequestToken) }];
+    return [{ type: "delete", targets: operation.chars.map(characterToRequestToken), hex: charsToHex(operation.chars) }];
   }
   if (operation.type === "deleteFromPositionToEnd") {
     return [
-      { type: "delete", targets: operation.chars.map(characterToRequestToken) },
+      { type: "delete", targets: operation.chars.map(characterToRequestToken), hex: charsToHex(operation.chars) },
       { type: "output_from_position_to_end", startPosition: operation.startPosition },
     ];
   }
@@ -850,6 +981,8 @@ function buildIntentActions(operation) {
       type: "replace",
       source: characterToRequestToken(operation.sourceChar),
       target: characterToRequestToken(operation.targetChar),
+      sourceHex: charsToHex([operation.sourceChar]),
+      targetHex: charsToHex([operation.targetChar]),
     }];
   }
   if (operation.type === "range") {
@@ -865,6 +998,10 @@ function buildIntentActions(operation) {
     return [{ type: "zero_suppress" }];
   }
   return [{ type: operation.type }];
+}
+
+function charsToHex(chars) {
+  return chars.map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
 }
 
 function buildCanonicalQueryFromStructuredNlp(structured) {
@@ -953,6 +1090,12 @@ function buildNlpDecisionSteps(structured, intentUnderstanding = null) {
         intent: intentUnderstanding.intent,
         confidence: Number(intentUnderstanding.confidence.toFixed(2)),
         contextSources: intentUnderstanding.contextSources,
+        targetConditions: intentUnderstanding.targetConditions.map((condition) => ({
+          code: condition.label,
+          codeId: condition.codeId,
+          length: condition.length,
+          source: condition.source,
+        })),
         symbologies: intentUnderstanding.symbologies.map((item) => item.label),
         readLengths: intentUnderstanding.readLengths,
         actions: intentUnderstanding.actions,
@@ -1058,7 +1201,7 @@ function buildLeadingCharactersCommand(query) {
     category: "登録例",
     summary: `${codeLabel}を対象に、${summaryTarget}読み取りデータの先頭${characterCount}桁のみを出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand)),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       "複数条件は | で区切り、2件目以降は DFMBK3 を付けずに条件ブロックだけを連結します。",
@@ -1128,7 +1271,7 @@ function buildRangeCharactersCommand(query) {
     category: "登録例",
     summary: `${codeLabel}を対象に、読み取りデータの${rangeLabel}を出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand)),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       "F2実行後にカーソルが送信した桁数分進むため、2つ目以降のF5は直前の送信後位置からの差分で指定します。",
@@ -1163,7 +1306,7 @@ function buildFromPositionToEndCommand(query) {
     category: "登録例",
     summary: `${codeLabel}を対象に、読み取りデータの${startPosition}桁目以降を出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand)),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F100 でそこから末尾まで送信します。`,
@@ -1218,7 +1361,7 @@ function findExactSpaceTransformCommand(query) {
     category: "登録例",
     summary: `${codeLabel}を対象に、${describeReplaceCharacter(sourceChar)}を${describeReplaceCharacter(targetChar)}に置き換えて出力します。`,
     keywords: [],
-    command: `DFMBK30099${codeId}9999E402${sourceHex}${targetHex}F100.`,
+    command: buildDataFormatCommandFromIntentConditions(query, `E402${sourceHex}${targetHex}F100`),
     notes: [
       `0 は Primary Data Format、099 は全端末、${codeId} は${codeLabel}、9999 は全桁数を表す指定です。`,
       `E4 は置換コマンド、02 は置換キャラクタ数、${sourceHex} は置換前の ${describeReplaceCharacter(sourceChar)}、${targetHex} は置換後の ${describeReplaceCharacter(targetChar)} です。`,
@@ -1292,7 +1435,7 @@ function buildReplaceThenRangeCommand(query) {
     category: "登録例",
     summary: `${codeLabel}・${lengthLabel}を対象に、${describeReplaceCharacter(replaceChars.sourceChar)}を${describeReplaceCharacter(replaceChars.targetChar)}に置き換えてから${startPosition}桁目から${characterCount}桁のみを出力します。`,
     keywords: [],
-    command: `DFMBK30099${codeId}${lengthField}E402${sourceHex}${targetHex}F7F5${cursorHex}F2${countHex}00.`,
+    command: buildDataFormatCommandFromIntentConditions(query, `E402${sourceHex}${targetHex}F7F5${cursorHex}F2${countHex}00`),
     notes: [
       `${codeId} は${codeLabel}を表す指定です。${lengthNote}`,
       `E402${sourceHex}${targetHex} は ${describeReplaceCharacter(replaceChars.sourceChar)} を ${describeReplaceCharacter(replaceChars.targetChar)} に置換する指定です。`,
@@ -1399,7 +1542,7 @@ function findExactDeleteCharacterCommand(query) {
     category: "登録例",
     summary: `${codeLabel}・${lengthLabel}を対象に、${targetLabel}を削除して出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand)),
     notes: [
       `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `FB は削除コマンド、${suppressCount} は削除キャラクタ数、${targetHex} は削除対象の ${targetLabel} です。`,
@@ -1427,10 +1570,11 @@ function buildSuffixB5Command(query) {
   const mentionsSuffix = ["末尾", "後ろ", "最後", "サフィックス", "suffix"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
 
-  if (!mentionsSuffix || !mentionsAppend) return null;
+  if (!mentionsSuffix || !mentionsAppend || hasPlainTextAppendTarget(query)) return null;
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengths = getReadLengthsForSuffixB5(normalizedQuery);
+  const pairedLengthConditions = getSymbologyLengthPairs(normalizedQuery);
   const key = findB5KeyForAppend(query);
   const modifier = getB5ModifierForAppend(query);
   if (!key && !mentionsModifier) return null;
@@ -1439,8 +1583,12 @@ function buildSuffixB5Command(query) {
   const keystrokeLabel = key ? `${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key}` : "CTRL";
   const editorCommand = `F100${keystrokeCommand}`;
   const codeLabel = symbologyTargets.map((item) => item.label).join("、");
-  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
-  const lengthNote = readLengths.length > 0
+  const lengthLabel = pairedLengthConditions.length >= 2
+    ? pairedLengthConditions.map((pair) => `${pair.target.label}${pair.length}桁`).join("、")
+    : readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = pairedLengthConditions.length >= 2
+    ? pairedLengthConditions.map((pair) => `${pair.target.codeId}${String(pair.length).padStart(4, "0")} は${pair.target.label}${pair.length}桁を対象にする指定です。`).join(" ")
+    : readLengths.length > 0
     ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
     : "9999 は全桁数を表す指定です。";
 
@@ -1450,7 +1598,7 @@ function buildSuffixB5Command(query) {
     category: "登録例",
     summary: `${codeLabel}・${lengthLabel}を対象に、読み取りデータを出力して末尾に${keystrokeLabel}キーを付加します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand)),
     notes: [
       `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は ${item.label}`).join("、")} を表す指定です。`,
       lengthNote,
@@ -1465,20 +1613,25 @@ function buildPrefixB5Command(query) {
   const mentionsPrefix = ["先頭", "前", "最初", "プリフィックス", "prefix"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
 
-  if (!mentionsPrefix || !mentionsAppend) return null;
+  if (!mentionsPrefix || !mentionsAppend || hasPlainTextAppendTarget(query)) return null;
 
   const key = findB5KeyForAppend(query);
   if (!key) return null;
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengths = getReadLengthsForSuffixB5(normalizedQuery);
+  const pairedLengthConditions = getSymbologyLengthPairs(normalizedQuery);
   const modifier = getB5ModifierForAppend(query);
   const keystrokeCommand = `B501${modifier.hex}${key.hex}`;
   const keystrokeLabel = `${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key}`;
   const editorCommand = `${keystrokeCommand}F100`;
   const codeLabel = symbologyTargets.map((item) => item.label).join("、");
-  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
-  const lengthNote = readLengths.length > 0
+  const lengthLabel = pairedLengthConditions.length >= 2
+    ? pairedLengthConditions.map((pair) => `${pair.target.label}${pair.length}桁`).join("、")
+    : readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = pairedLengthConditions.length >= 2
+    ? pairedLengthConditions.map((pair) => `${pair.target.codeId}${String(pair.length).padStart(4, "0")} は${pair.target.label}${pair.length}桁を対象にする指定です。`).join(" ")
+    : readLengths.length > 0
     ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
     : "9999 は全桁数を表す指定です。";
 
@@ -1488,7 +1641,7 @@ function buildPrefixB5Command(query) {
     category: "登録例",
     summary: `${codeLabel}・${lengthLabel}を対象に、読み取りデータの先頭に${keystrokeLabel}キーを付加します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand)),
     notes: [
       `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は ${item.label}`).join("、")} を表す指定です。`,
       lengthNote,
@@ -1525,7 +1678,7 @@ function buildTrimLeadingZeroesCommand(query) {
     category: "登録例",
     summary: `${codeLabel}を対象に、読み取りデータ先頭の連続する0をスキップして出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       "E630 は現在のカーソル位置から 0 以外のキャラクタ手前まで移動する指定です。",
@@ -1543,6 +1696,11 @@ function normalizeAsciiText(value) {
 
 function stringToAsciiHex(value) {
   return [...value].map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
+}
+
+function hasPlainTextAppendTarget(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:に|へ)?\s*[A-Za-z0-9]{2,20}\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i.test(asciiQuery);
 }
 
 function findPrefixText(query) {
@@ -1583,7 +1741,7 @@ function buildPrefixTextCommand(query) {
     category: "登録例",
     summary: `${codeLabel}を対象に、読み取りデータの先頭へ${prefixText}を付加して出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `BA${textLength}${textHex} は ${prefixText} を現在位置、つまりデータ先頭に挿入する指定です。`,
@@ -1639,7 +1797,7 @@ function buildInsertTextAtPositionCommand(query) {
     category: "登録例",
     summary: `${codeLabel}を対象に、読み取りデータの${position}桁目に${text}を付加して出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `F2${prefixCountHex}00 は先頭${prefixCount}桁を出力し、カーソルを${position}桁目へ進める指定です。`,
@@ -1725,7 +1883,7 @@ function buildSymbologyDelayKeyCommand(query) {
     category: "登録例",
     summary: `${symbology.label}を対象に、読み取りデータを出力して${delay.delay}待機した後、${key.key}キーを付加します。`,
     keywords: [],
-    command: `DFMBK30099${symbology.codeId}9999F100${delay.command}B501${modifier.hex}${key.hex}.`,
+    command: buildDataFormatCommandFromIntentConditions(query, `F100${delay.command}B501${modifier.hex}${key.hex}`),
     notes: [
       `0 は Primary Data Format、099 は全端末、${symbology.codeId} は ${symbology.label}、9999 は全桁数を表す指定です。`,
       `F100 は読み取りデータを全て出力し、${delay.command} は ${delay.delay} の待機を挿入する指定です。`,
@@ -1780,7 +1938,7 @@ function buildDeleteThenRangeCommand(query) {
     category: "登録例",
     summary: `${codeLabel}・${lengthLabel}を対象に、${targetLabel}を削除してから${startPosition}桁目から${characterCount}桁のみを出力します。`,
     keywords: [],
-    command: `DFMBK30099${codeId}${lengthField}FB${suppressCount}${targetHex}F7F5${cursorHex}F2${countHex}00.`,
+    command: buildDataFormatCommandFromIntentConditions(query, `FB${suppressCount}${targetHex}F7F5${cursorHex}F2${countHex}00`),
     notes: [
       `${codeId} は${codeLabel}を表す指定です。${lengthNote}`,
       `FB${suppressCount}${targetHex} は ${targetLabel} を削除する指定です。`,
@@ -1828,7 +1986,7 @@ function buildDeleteThenFromPositionToEndCommand(query) {
     category: "登録例",
     summary: `${codeLabel}・${lengthLabel}を対象に、${targetLabel}を削除してから${startPosition}桁目以降を出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromBlocks(buildTargetBlocks(symbologyTargets, readLengths, editorCommand)),
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
     notes: [
       `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `FB${suppressCount}${targetHex} は ${targetLabel} を削除する指定です。`,
@@ -2116,6 +2274,18 @@ function htmlToPlainText(html) {
 }
 
 function commandToHtml(item) {
+  if (item.validationFailed) {
+    return `
+      <div class="command-card">
+        <strong>生成前チェックで確認が必要です</strong>
+        <p>Intent理解JSONと生成コマンドの条件が一致しなかったため、バーコード生成を停止しました。</p>
+        <ul>
+          ${item.validationErrors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}
+        </ul>
+      </div>
+    `;
+  }
+
   const settingCommand = normalizeSettingCommand(item.command);
   return `
     <div class="command-card">
@@ -2182,6 +2352,129 @@ function applyClearSettingsPrefix(item, shouldPrefix) {
       ...(item.notes || []),
     ],
   };
+}
+
+function validateGeneratedCommand(item, intentUnderstanding) {
+  if (!item || !intentUnderstanding || intentUnderstanding.intent !== "data_format_setting") return item;
+
+  const command = normalizeSettingCommand(item.command);
+  const validationErrors = [];
+  const targetConditions = intentUnderstanding.targetConditions || [];
+  const pairedConditions = targetConditions.filter((condition) => condition.source === "paired");
+  const conditionsToCheck = pairedConditions.length >= 2 ? pairedConditions : [];
+
+  conditionsToCheck.forEach((condition) => {
+    const conditionPrefix = `0099${condition.codeId}${condition.lengthField}`;
+    if (!command.includes(conditionPrefix)) {
+      validationErrors.push(`${condition.label}${condition.length}桁の条件 ${conditionPrefix} がありません。`);
+    }
+  });
+
+  intentUnderstanding.actions.forEach((action) => {
+    const expectedEditorCommands = getExpectedEditorCommandsForAction(action);
+    if (expectedEditorCommands.length === 0) return;
+
+    const checkTargets = conditionsToCheck.length > 0 ? conditionsToCheck : targetConditions;
+    checkTargets.forEach((condition) => {
+      const conditionPrefix = `0099${condition.codeId}${condition.lengthField}`;
+      expectedEditorCommands.forEach((expectedEditorCommand) => {
+        const expectedBlock = `${conditionPrefix}${expectedEditorCommand}`;
+        if (!command.includes(expectedBlock) && !command.includes(expectedEditorCommand)) {
+          validationErrors.push(`${condition.label}${condition.length}桁の編集コマンド ${expectedEditorCommand} が一致しません。`);
+        }
+      });
+    });
+  });
+
+  const fullEditorCommands = getExpectedFullEditorCommands(intentUnderstanding.actions);
+  fullEditorCommands.forEach((editorCommand) => {
+    const checkTargets = conditionsToCheck.length > 0 ? conditionsToCheck : [];
+    checkTargets.forEach((condition) => {
+      const expectedBlock = `0099${condition.codeId}${condition.lengthField}${editorCommand}`;
+      if (!command.includes(expectedBlock)) {
+        validationErrors.push(`${condition.label}${condition.length}桁の編集コマンド全体 ${editorCommand} が一致しません。`);
+      }
+    });
+  });
+
+  if (validationErrors.length > 0) {
+    return {
+      id: "df-validation-failed",
+      label: "生成前チェックで不一致",
+      category: "確認",
+      summary: "生成したコマンドがIntent理解JSONの条件と一致しませんでした。",
+      keywords: [],
+      command: "",
+      validationFailed: true,
+      validationErrors,
+    };
+  }
+
+  return {
+    ...item,
+    notes: [
+      ...buildGenerationCheckNotes(intentUnderstanding),
+      ...(item.notes || []),
+    ],
+  };
+}
+
+function getExpectedEditorCommandsForAction(action) {
+  if (action.type === "prefix_key") return [`${action.command}F100`];
+  if (action.type === "suffix_key") return [`F100${action.command}`];
+  if (action.type === "replace") return [`E402${action.sourceHex}${action.targetHex}`];
+  if (action.type === "delete") return [`FB${String((action.hex || "").length / 2).padStart(2, "0")}${action.hex}`];
+  if (action.type === "output_from_position_to_end") {
+    const cursorHex = String(action.startPosition - 1).padStart(2, "0");
+    return [`F5${cursorHex}F100`];
+  }
+  if (action.type === "output_leading") {
+    return [`F2${String(action.characterCount).padStart(2, "0")}00`];
+  }
+  if (action.type === "zero_suppress") return ["E630F100"];
+  return [];
+}
+
+function getExpectedFullEditorCommands(actions) {
+  const deleteAction = actions.find((action) => action.type === "delete");
+  const fromAction = actions.find((action) => action.type === "output_from_position_to_end");
+  if (deleteAction && fromAction) {
+    const cursorHex = String(fromAction.startPosition - 1).padStart(2, "0");
+    return [`FB${String((deleteAction.hex || "").length / 2).padStart(2, "0")}${deleteAction.hex}F7F5${cursorHex}F100`];
+  }
+
+  const rangeAction = actions.find((action) => action.type === "output_ranges");
+  if (rangeAction) {
+    let cursorPosition = 1;
+    const parts = [];
+    for (const range of rangeAction.ranges) {
+      const cursorMove = range.startPosition - cursorPosition;
+      if (cursorMove < 0 || cursorMove > 99) return [];
+      parts.push(`F5${String(cursorMove).padStart(2, "0")}F2${String(range.characterCount).padStart(2, "0")}00`);
+      cursorPosition = range.startPosition + range.characterCount;
+    }
+    return [parts.join("")];
+  }
+
+  return [];
+}
+
+function buildGenerationCheckNotes(intentUnderstanding) {
+  const notes = [];
+  const pairedConditions = (intentUnderstanding.targetConditions || []).filter((condition) => condition.source === "paired");
+  if (pairedConditions.length >= 2) {
+    notes.push(`生成前チェック: ${pairedConditions.map((condition) => `${condition.label}${condition.length}桁=${condition.codeId}${condition.lengthField}`).join("、")} の条件ペアを確認しました。`);
+  }
+
+  intentUnderstanding.actions.forEach((action) => {
+    if (action.type === "prefix_key") {
+      notes.push(`生成前チェック: 先頭付加のため ${action.command}F100 の順序を確認しました。`);
+    } else if (action.type === "suffix_key") {
+      notes.push(`生成前チェック: 末尾付加のため F100${action.command} の順序を確認しました。`);
+    }
+  });
+
+  return notes;
 }
 
 function getSymbologyLabelById(codeId) {
@@ -2647,8 +2940,8 @@ function answerQuestion(question) {
   }
 
   const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
-  const commandHtml = (item) => commandToHtml(applyClearSettingsPrefix(item, shouldClearSettings));
   const intentUnderstanding = buildIntentUnderstanding(question);
+  const commandHtml = (item) => commandToHtml(validateGeneratedCommand(applyClearSettingsPrefix(item, shouldClearSettings), intentUnderstanding));
   const structuredNlpCommand = buildCommandFromStructuredNlp(question, intentUnderstanding);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
