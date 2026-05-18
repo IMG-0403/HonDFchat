@@ -1802,7 +1802,7 @@ function normalizeInsertControlToken(value) {
 function findMultiPositionControlInsertions(query) {
   const asciiQuery = normalizeAsciiText(query);
   const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
-  const pattern = new RegExp(`(\\d{1,2})\\s*桁目\\s*(?:に|へ)?\\s*(${tokenPattern})\\s*(?:を)?\\s*(?:(\\d{1,2})\\s*個)?\\s*(?:付加|追加|つける|付ける|挿入)?`, "gi");
+  const pattern = new RegExp(`(\\d{1,2})\\s*桁目\\s*(?:に|へ)?\\s*(${tokenPattern})\\s*(?:を)?\\s*(?:(\\d{1,2})\\s*(?:回|個))?\\s*(?:付加|追加|つける|付ける|挿入)?`, "gi");
   const insertions = [];
   let match;
 
