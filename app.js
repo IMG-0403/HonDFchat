@@ -786,6 +786,7 @@ function buildSingleClauseCommand(clause) {
     buildReplaceThenRangeCommand,
     buildTrimLeadingZeroesCommand,
     findExactSpaceTransformCommand,
+    buildDeleteThenLeadingCommand,
     buildDeleteThenFromPositionToEndCommand,
     findExactDeleteCharacterCommand,
     buildUntilCharacterCommand,
@@ -2287,6 +2288,53 @@ function buildDeleteThenRangeCommand(query) {
   };
 }
 
+function buildDeleteThenLeadingCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const leadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁/);
+  const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
+
+  if (!leadingMatch || !mentionsDelete || !/(出力|送信|表示|取り出|切り出|ください)/.test(normalizedQuery)) return null;
+
+  const targetChars = findDeleteTargetCharacters(query);
+  const characterCount = Number(leadingMatch[1]);
+  if (
+    targetChars.length === 0 ||
+    !Number.isInteger(characterCount) ||
+    characterCount < 1 ||
+    characterCount > 9999
+  ) {
+    return null;
+  }
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const targetHex = targetChars.map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
+  const suppressCount = targetChars.length.toString().padStart(2, "0");
+  const targetLabel = targetChars.map(describeReplaceCharacter).join("と");
+  const outputCommand = splitSendCounts(characterCount).map((count) => `F2${String(count).padStart(2, "0")}00`).join("");
+  const editorCommand = `FB${suppressCount}${targetHex}F7${outputCommand}`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-delete-${targetHex}-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-first-${characterCount}`,
+    label: `${codeLabel}・${lengthLabel} ${targetLabel}を削除後 先頭${characterCount}桁を出力`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、${targetLabel}を削除してから先頭${characterCount}桁を出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `FB${suppressCount}${targetHex} は ${targetLabel} を削除する指定です。`,
+      "F7 は削除後にカーソルを先頭へ戻す指定です。",
+      `${outputCommand} は先頭から${characterCount}桁を送信する指定です。99桁を超える場合はF2を分割します。`,
+    ],
+  };
+}
+
 function buildDeleteThenFromPositionToEndCommand(query) {
   const normalizedQuery = normalizeText(query);
   const fromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
@@ -3296,6 +3344,7 @@ function answerQuestion(question) {
   const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
+  const deleteThenLeadingCommand = buildDeleteThenLeadingCommand(question);
   const deleteThenFromPositionToEndCommand = buildDeleteThenFromPositionToEndCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
   const untilCharacterCommand = buildUntilCharacterCommand(question);
@@ -3354,6 +3403,11 @@ function answerQuestion(question) {
 
   if (deleteThenRangeCommand) {
     addBotResponse(question, commandHtml(deleteThenRangeCommand), { html: true });
+    return;
+  }
+
+  if (deleteThenLeadingCommand) {
+    addBotResponse(question, commandHtml(deleteThenLeadingCommand), { html: true });
     return;
   }
 
