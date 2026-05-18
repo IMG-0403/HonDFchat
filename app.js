@@ -732,6 +732,108 @@ function buildDataFormatCommandFromIntentConditions(query, editorCommand) {
   return buildDataFormatCommandFromBlocks(blocks);
 }
 
+function findSymbologyClauseStarts(normalizedQuery) {
+  const names = symbologyCodeTable
+    .filter((item) => item.codeId !== "99")
+    .flatMap((item) => [item.label, ...(item.aliases || [])].map((name) => ({
+      target: item,
+      name: normalizeText(name),
+    })))
+    .filter((entry) => entry.name)
+    .sort((a, b) => b.name.length - a.name.length);
+  const starts = [];
+
+  names.forEach((entry) => {
+    const pattern = new RegExp(escapeRegExp(entry.name), "g");
+    let match;
+    while ((match = pattern.exec(normalizedQuery)) !== null) {
+      starts.push({ index: match.index, length: entry.name.length, target: entry.target });
+    }
+  });
+
+  const byIndex = new Map();
+  starts.forEach((start) => {
+    const existing = byIndex.get(start.index);
+    if (!existing || start.length > existing.length) byIndex.set(start.index, start);
+  });
+
+  return [...byIndex.values()].sort((a, b) => a.index - b.index);
+}
+
+function splitIntoSymbologyClauses(query) {
+  const normalizedQuery = normalizeText(query);
+  const starts = findSymbologyClauseStarts(normalizedQuery);
+  if (starts.length < 2) return [];
+
+  return starts
+    .map((start, index) => {
+      const end = starts[index + 1]?.index ?? query.length;
+      return query.slice(start.index, end).replace(/^[、,\s]+|[、,\s]+$/g, "").trim();
+    })
+    .filter(Boolean);
+}
+
+function extractDataFormatBlocks(command) {
+  const normalizedCommand = normalizeSettingCommand(command);
+  const commandBody = normalizedCommand.startsWith("DFMBK3")
+    ? normalizedCommand.slice("DFMBK3".length, -1)
+    : normalizedCommand.replace(/\.$/, "");
+  return commandBody.split("|").filter(Boolean);
+}
+
+function buildSingleClauseCommand(clause) {
+  const builders = [
+    buildReplaceThenRangeCommand,
+    buildTrimLeadingZeroesCommand,
+    findExactSpaceTransformCommand,
+    buildDeleteThenFromPositionToEndCommand,
+    findExactDeleteCharacterCommand,
+    buildUntilCharacterCommand,
+    buildRangeCharactersCommand,
+    buildFromPositionToEndCommand,
+    buildLeadingCharactersCommand,
+    buildRepeatedSuffixControlInsertCommand,
+    buildMultiPositionControlInsertCommand,
+    buildInsertTextAtPositionCommand,
+    buildPrefixTextCommand,
+    buildPrefixB5Command,
+    buildSuffixB5Command,
+    buildSymbologyDelayKeyCommand,
+  ];
+
+  for (const builder of builders) {
+    const item = builder(clause);
+    if (item) return item;
+  }
+
+  return null;
+}
+
+function buildMultiClauseCommand(query) {
+  const clauses = splitIntoSymbologyClauses(query);
+  if (clauses.length < 2) return null;
+
+  const items = clauses.map(buildSingleClauseCommand);
+  if (items.some((item) => !item)) return null;
+
+  const blocks = items.flatMap((item) => extractDataFormatBlocks(item.command));
+  if (blocks.length < 2) return null;
+
+  return {
+    id: `df-generated-multi-clause-${blocks.length}`,
+    label: "複数条件のデータフォーマット",
+    category: "登録例",
+    summary: clauses.join(" / "),
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(blocks),
+    skipGenerationValidation: true,
+    notes: [
+      "句読点で区切られたコード種ごとの依頼を、それぞれ別条件ブロックとして生成しました。",
+      ...items.flatMap((item) => item.notes || []),
+    ],
+  };
+}
+
 function buildTargetConditions(normalizedQuery) {
   const pairedConditions = getSymbologyLengthPairs(normalizedQuery);
   if (pairedConditions.length >= 2) {
@@ -2582,6 +2684,7 @@ function applyClearSettingsPrefix(item, shouldPrefix) {
 
 function validateGeneratedCommand(item, intentUnderstanding) {
   if (!item || !intentUnderstanding || intentUnderstanding.intent !== "data_format_setting") return item;
+  if (item.skipGenerationValidation) return item;
 
   const command = normalizeSettingCommand(item.command);
   const validationErrors = [];
@@ -3169,6 +3272,7 @@ function answerQuestion(question) {
   const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
   const intentUnderstanding = buildIntentUnderstanding(question);
   const commandHtml = (item) => commandToHtml(validateGeneratedCommand(applyClearSettingsPrefix(item, shouldClearSettings), intentUnderstanding));
+  const multiClauseCommand = buildMultiClauseCommand(question);
   const structuredNlpCommand = buildCommandFromStructuredNlp(question, intentUnderstanding);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
@@ -3191,6 +3295,11 @@ function answerQuestion(question) {
   const b5ModifierMatches = findB5Modifiers(question);
   const b5KeyMatches = findB5Keys(question);
   const matches = findMatches(question);
+
+  if (multiClauseCommand) {
+    addBotResponse(question, commandHtml(multiClauseCommand), { html: true });
+    return;
+  }
 
   if (structuredNlpCommand) {
     addBotResponse(question, commandHtml(structuredNlpCommand), { html: true });
