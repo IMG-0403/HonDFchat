@@ -750,8 +750,121 @@ function parseStructuredNlpRequest(query) {
     }
   }
 
+  if (!structured.operation) return null;
+
   structured.canonicalQuery = buildCanonicalQueryFromStructuredNlp(structured);
-  return structured.operation ? structured : null;
+  return structured;
+}
+
+function buildIntentUnderstanding(question) {
+  const normalizedQuery = normalizeText(question);
+  const structured = parseStructuredNlpRequest(question);
+  const looksLikeDataFormat = looksLikeDataFormatRequest(normalizedQuery);
+
+  if (!structured) {
+    return {
+      intent: looksLikeDataFormat ? "data_format_setting" : "unknown",
+      confidence: looksLikeDataFormat ? 0.35 : 0.1,
+      contextSources: buildIntentContextSources(),
+      clearBeforeApply: shouldClearSettingsBeforeCommand(question),
+      symbologies: [],
+      readLengths: [],
+      actions: [],
+      missingSlots: looksLikeDataFormat ? ["operation"] : ["intent"],
+      canonicalQuery: "",
+      structured: null,
+      original: question,
+    };
+  }
+
+  const missingSlots = [];
+  const operation = structured.operation;
+  if (!operation) missingSlots.push("operation");
+  if (!hasOperationTarget(operation)) missingSlots.push("target");
+
+  const hasSpecificSymbology = structured.symbologyTargets.some((target) => target.codeId !== "99");
+  let confidence = 0.58;
+  if (operation) confidence += 0.22;
+  if (hasOperationTarget(operation)) confidence += 0.08;
+  if (hasSpecificSymbology) confidence += 0.06;
+  if (structured.readLengths.length > 0) confidence += 0.03;
+  if (missingSlots.length > 0) confidence -= 0.2;
+  confidence = Math.max(0.1, Math.min(0.98, confidence));
+
+  return {
+    intent: "data_format_setting",
+    confidence,
+    contextSources: buildIntentContextSources(),
+    clearBeforeApply: shouldClearSettingsBeforeCommand(question),
+    symbologies: structured.symbologyTargets.map((target) => ({
+      label: target.label,
+      codeId: target.codeId,
+      explicit: target.codeId !== "99",
+    })),
+    readLengths: structured.readLengths,
+    actions: buildIntentActions(operation),
+    missingSlots,
+    canonicalQuery: structured.canonicalQuery,
+    structured,
+    original: question,
+  };
+}
+
+function buildIntentContextSources() {
+  return {
+    conversationHistory: "current_session",
+    userInfo: "not_configured",
+    relatedKnowledge: ["local_command_rules", "registered_command_catalog"],
+  };
+}
+
+function looksLikeDataFormatRequest(normalizedQuery) {
+  if (!normalizedQuery) return false;
+  return /(読み取り|読取|バーコード|コード|qr|ocr|code|data\s*matrix|データフォーマット|桁|出力|送信|表示|削除|除去|置換|付加|追加|挿入|サプレス|プリフィックス|サフィックス|先頭|末尾|gs|f\d{1,2}|矢印)/i.test(normalizedQuery);
+}
+
+function hasOperationTarget(operation) {
+  if (!operation) return false;
+  if (operation.type === "delete" || operation.type === "deleteFromPositionToEnd") return operation.chars.length > 0;
+  if (operation.type === "replace") return Boolean(operation.sourceChar && operation.targetChar);
+  if (operation.type === "range") return operation.ranges.length > 0;
+  if (operation.type === "fromPositionToEnd") return Number.isInteger(operation.startPosition);
+  if (operation.type === "leading") return Number.isInteger(operation.characterCount);
+  if (operation.type === "zeroSuppress") return true;
+  return true;
+}
+
+function buildIntentActions(operation) {
+  if (!operation) return [];
+  if (operation.type === "delete") {
+    return [{ type: "delete", targets: operation.chars.map(characterToRequestToken) }];
+  }
+  if (operation.type === "deleteFromPositionToEnd") {
+    return [
+      { type: "delete", targets: operation.chars.map(characterToRequestToken) },
+      { type: "output_from_position_to_end", startPosition: operation.startPosition },
+    ];
+  }
+  if (operation.type === "replace") {
+    return [{
+      type: "replace",
+      source: characterToRequestToken(operation.sourceChar),
+      target: characterToRequestToken(operation.targetChar),
+    }];
+  }
+  if (operation.type === "range") {
+    return [{ type: "output_ranges", ranges: operation.ranges }];
+  }
+  if (operation.type === "fromPositionToEnd") {
+    return [{ type: "output_from_position_to_end", startPosition: operation.startPosition }];
+  }
+  if (operation.type === "leading") {
+    return [{ type: "output_leading", characterCount: operation.characterCount }];
+  }
+  if (operation.type === "zeroSuppress") {
+    return [{ type: "zero_suppress" }];
+  }
+  return [{ type: operation.type }];
 }
 
 function buildCanonicalQueryFromStructuredNlp(structured) {
@@ -800,9 +913,9 @@ function characterToRequestToken(char) {
   return char;
 }
 
-function buildCommandFromStructuredNlp(question) {
-  const structured = parseStructuredNlpRequest(question);
-  if (!structured) return null;
+function buildCommandFromStructuredNlp(question, intentUnderstanding = buildIntentUnderstanding(question)) {
+  const structured = intentUnderstanding?.structured;
+  if (!structured || intentUnderstanding.confidence < 0.7) return null;
 
   const query = structured.canonicalQuery || question;
   const builders = [
@@ -822,7 +935,7 @@ function buildCommandFromStructuredNlp(question) {
       return {
         ...command,
         notes: [
-          ...buildNlpDecisionSteps(structured),
+          ...buildNlpDecisionSteps(structured, intentUnderstanding),
           ...(command.notes || []),
         ],
       };
@@ -832,9 +945,21 @@ function buildCommandFromStructuredNlp(question) {
   return null;
 }
 
-function buildNlpDecisionSteps(structured) {
+function buildNlpDecisionSteps(structured, intentUnderstanding = null) {
   const operation = structured.operation;
+  const intentJson = intentUnderstanding
+    ? {
+        intent: intentUnderstanding.intent,
+        confidence: Number(intentUnderstanding.confidence.toFixed(2)),
+        contextSources: intentUnderstanding.contextSources,
+        symbologies: intentUnderstanding.symbologies.map((item) => item.label),
+        readLengths: intentUnderstanding.readLengths,
+        actions: intentUnderstanding.actions,
+        clearBeforeApply: intentUnderstanding.clearBeforeApply,
+      }
+    : null;
   const steps = [
+    ...(intentJson ? [`判断0: Intent理解JSON ${JSON.stringify(intentJson)} を作成しました。`] : []),
     `判断1: コード種は ${symbologyTargetsToText(structured.symbologyTargets) || "全コード種"} と判断しました。`,
     `判断2: 桁数条件は ${readLengthsToText(structured.readLengths) || "全桁数"} と判断しました。`,
     `判断3: 処理内容は ${getOperationLabel(operation)} と判断しました。`,
@@ -847,6 +972,28 @@ function buildNlpDecisionSteps(structured) {
 
   steps.push(`判断5: 標準化した依頼文「${structured.canonicalQuery}」を既存ロジックに渡してコマンド生成しました。`);
   return steps;
+}
+
+function shouldAskClarification(intentUnderstanding) {
+  if (!intentUnderstanding) return false;
+  return intentUnderstanding.intent === "data_format_setting" && intentUnderstanding.confidence < 0.7;
+}
+
+function buildClarificationHtml(intentUnderstanding) {
+  const missingSlots = intentUnderstanding?.missingSlots || [];
+  const needsOperation = missingSlots.includes("operation");
+  const guidance = needsOperation
+    ? "処理内容をもう少し具体的に入力してください。削除、置換、指定桁出力、付加などを判断できる形にするとコマンド生成できます。"
+    : "依頼内容をもう少し具体的に入力してください。";
+
+  return `
+    <div class="command-card">
+      <strong>確認が必要です</strong>
+      <p>${escapeHtml(guidance)}</p>
+      <p>例: QR10桁読み取り時、ハイフン削除</p>
+      <p>例: Code128読み取り時に5桁目から出力</p>
+    </div>
+  `;
 }
 
 function getOperationLabel(operation) {
@@ -2435,7 +2582,8 @@ function answerQuestion(question) {
 
   const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
   const commandHtml = (item) => commandToHtml(applyClearSettingsPrefix(item, shouldClearSettings));
-  const structuredNlpCommand = buildCommandFromStructuredNlp(question);
+  const intentUnderstanding = buildIntentUnderstanding(question);
+  const structuredNlpCommand = buildCommandFromStructuredNlp(question, intentUnderstanding);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
   const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
@@ -2546,6 +2694,11 @@ function answerQuestion(question) {
   }
 
   if (matches.length === 0) {
+    if (shouldAskClarification(intentUnderstanding)) {
+      addMessage("bot", buildClarificationHtml(intentUnderstanding), { html: true });
+      return;
+    }
+
     addMessage("bot", barcodeUnavailableHtml, { html: true });
     return;
   }
