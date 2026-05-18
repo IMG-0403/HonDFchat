@@ -31,9 +31,12 @@ const adminLoginMap = {
   imgtech: "imgtech@hon-data-format.local",
 };
 
+adminContent.hidden = true;
+
 if (!supabase) {
   setupNotice.hidden = false;
   loginPanel.hidden = true;
+  adminContent.hidden = true;
 } else {
   initialize();
 }
