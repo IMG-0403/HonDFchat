@@ -1811,6 +1811,48 @@ function findMultiPositionControlInsertions(query) {
   return uniqueInsertions;
 }
 
+function findRepeatedSuffixControlInsertion(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const pattern = new RegExp(`(?:末尾|最後|データ末尾|サフィックス|suffix)?\\s*(${tokenPattern})\\s*(?:を)?\\s*(\\d{1,2})\\s*(?:回|個)\\s*(?:付加|追加|つける|付ける|挿入)`, "i");
+  const match = asciiQuery.match(pattern);
+  if (!match) return null;
+
+  const control = normalizeInsertControlToken(match[1]);
+  const count = Number(match[2]);
+  if (!control || !Number.isInteger(count) || count < 2 || count > 99) return null;
+  return { count, ...control };
+}
+
+function buildRepeatedSuffixControlInsertCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const insertion = findRepeatedSuffixControlInsertion(query);
+  const mentionsOutput = /(出力|送信|表示|読み取り|読取)/.test(normalizedQuery);
+  if (!insertion || !mentionsOutput) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const editorCommand = `F100F4${insertion.hex}${String(insertion.count).padStart(2, "0")}`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-repeated-suffix-${insertion.hex}-${insertion.count}`,
+    label: `${codeLabel}・${lengthLabel} ${insertion.label}を${insertion.count}回付加して出力`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、読み取りデータを出力してから${insertion.label}を${insertion.count}回付加します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `F100 は読み取りデータを全て出力し、F4${insertion.hex}${String(insertion.count).padStart(2, "0")} で${insertion.label}を${insertion.count}回付加します。`,
+    ],
+  };
+}
+
 function buildMultiPositionControlInsertCommand(query) {
   const normalizedQuery = normalizeText(query);
   const insertions = findMultiPositionControlInsertions(query);
@@ -3112,6 +3154,7 @@ function answerQuestion(question) {
   const structuredNlpCommand = buildCommandFromStructuredNlp(question, intentUnderstanding);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
+  const repeatedSuffixControlInsertCommand = buildRepeatedSuffixControlInsertCommand(question);
   const multiPositionControlInsertCommand = buildMultiPositionControlInsertCommand(question);
   const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
   const prefixB5Command = buildPrefixB5Command(question);
@@ -3143,6 +3186,11 @@ function answerQuestion(question) {
 
   if (trimLeadingZeroesCommand) {
     addBotResponse(question, commandHtml(trimLeadingZeroesCommand), { html: true });
+    return;
+  }
+
+  if (repeatedSuffixControlInsertCommand) {
+    addBotResponse(question, commandHtml(repeatedSuffixControlInsertCommand), { html: true });
     return;
   }
 
