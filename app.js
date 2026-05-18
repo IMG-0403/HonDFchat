@@ -2031,6 +2031,9 @@ function iconForCategory(category) {
   return icons.scan;
 }
 
+const chatLogStorageKey = "honDataFormatChatLogs";
+const chatLogLimit = 1000;
+
 function addMessage(role, content, options = {}) {
   if (!content) return;
   if (!messages || !template) return;
@@ -2048,6 +2051,68 @@ function addMessage(role, content, options = {}) {
   messages.append(node);
   renderAztecBarcodes(bubble);
   messages.scrollTop = messages.scrollHeight;
+}
+
+function addBotResponse(question, content, options = {}) {
+  addMessage("bot", content, options);
+  saveChatbotLog(question, content, options);
+}
+
+function saveChatbotLog(question, answerContent, options = {}) {
+  if (!question || !answerContent) return;
+  const logEntry = {
+    createdAt: new Date().toISOString(),
+    question: String(question),
+    answer: normalizeLogAnswer(answerContent, options),
+  };
+
+  try {
+    const logs = JSON.parse(localStorage.getItem(chatLogStorageKey) || "[]");
+    logs.push(logEntry);
+
+    localStorage.setItem(chatLogStorageKey, JSON.stringify(logs.slice(-chatLogLimit)));
+  } catch (_error) {
+    // ログ保存に失敗してもチャット回答は継続します。
+  }
+
+  saveRemoteChatbotLog(logEntry);
+}
+
+async function saveRemoteChatbotLog(logEntry) {
+  const { url, anonKey } = getSupabaseConfig();
+  if (!url || !anonKey) return;
+
+  try {
+    await fetch(`${url}/rest/v1/chatbot_logs`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        created_at: logEntry.createdAt,
+        question: logEntry.question,
+        answer: logEntry.answer,
+        page_url: window.location.href,
+        user_agent: navigator.userAgent,
+      }),
+    });
+  } catch (_error) {
+    // Supabaseへ保存できない場合も、ローカルログとチャット回答は継続します。
+  }
+}
+
+function normalizeLogAnswer(content, options = {}) {
+  const text = options.html ? htmlToPlainText(content) : String(content);
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function htmlToPlainText(html) {
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  return container.textContent || "";
 }
 
 function commandToHtml(item) {
@@ -2571,13 +2636,13 @@ function renderAztecBarcodes(root = document) {
 
 function answerQuestion(question) {
   if (isEmptyDataFormatCommand(question)) {
-    addMessage("bot", "現在はデータフォーマット設定されていません。");
+    addBotResponse(question, "現在はデータフォーマット設定されていません。");
     return;
   }
 
   if (isDataFormatCommandText(question)) {
     const explanationHtml = explainDataFormatCommandToHtml(question);
-    addMessage("bot", explanationHtml || barcodeUnavailableHtml, { html: true });
+    addBotResponse(question, explanationHtml || barcodeUnavailableHtml, { html: true });
     return;
   }
 
@@ -2605,111 +2670,111 @@ function answerQuestion(question) {
   const matches = findMatches(question);
 
   if (structuredNlpCommand) {
-    addMessage("bot", commandHtml(structuredNlpCommand), { html: true });
+    addBotResponse(question, commandHtml(structuredNlpCommand), { html: true });
     return;
   }
 
   if (replaceThenRangeCommand) {
-    addMessage("bot", commandHtml(replaceThenRangeCommand), { html: true });
+    addBotResponse(question, commandHtml(replaceThenRangeCommand), { html: true });
     return;
   }
 
   if (trimLeadingZeroesCommand) {
-    addMessage("bot", commandHtml(trimLeadingZeroesCommand), { html: true });
+    addBotResponse(question, commandHtml(trimLeadingZeroesCommand), { html: true });
     return;
   }
 
   if (insertTextAtPositionCommand) {
-    addMessage("bot", commandHtml(insertTextAtPositionCommand), { html: true });
+    addBotResponse(question, commandHtml(insertTextAtPositionCommand), { html: true });
     return;
   }
 
   if (prefixB5Command) {
-    addMessage("bot", commandHtml(prefixB5Command), { html: true });
+    addBotResponse(question, commandHtml(prefixB5Command), { html: true });
     return;
   }
 
   if (prefixTextCommand) {
-    addMessage("bot", commandHtml(prefixTextCommand), { html: true });
+    addBotResponse(question, commandHtml(prefixTextCommand), { html: true });
     return;
   }
 
   if (deleteThenRangeCommand) {
-    addMessage("bot", commandHtml(deleteThenRangeCommand), { html: true });
+    addBotResponse(question, commandHtml(deleteThenRangeCommand), { html: true });
     return;
   }
 
   if (deleteThenFromPositionToEndCommand) {
-    addMessage("bot", commandHtml(deleteThenFromPositionToEndCommand), { html: true });
+    addBotResponse(question, commandHtml(deleteThenFromPositionToEndCommand), { html: true });
     return;
   }
 
   if (symbologyDelayKeyCommand) {
-    addMessage("bot", commandHtml(symbologyDelayKeyCommand), { html: true });
+    addBotResponse(question, commandHtml(symbologyDelayKeyCommand), { html: true });
     return;
   }
 
   if (suffixB5Command) {
-    addMessage("bot", commandHtml(suffixB5Command), { html: true });
+    addBotResponse(question, commandHtml(suffixB5Command), { html: true });
     return;
   }
 
   if (exactTransformCommand) {
-    addMessage("bot", commandHtml(exactTransformCommand), { html: true });
+    addBotResponse(question, commandHtml(exactTransformCommand), { html: true });
     return;
   }
 
   if (exactDeleteCommand) {
-    addMessage("bot", commandHtml(exactDeleteCommand), { html: true });
+    addBotResponse(question, commandHtml(exactDeleteCommand), { html: true });
     return;
   }
 
   if (generatedRangeCommand) {
-    addMessage("bot", commandHtml(generatedRangeCommand), { html: true });
+    addBotResponse(question, commandHtml(generatedRangeCommand), { html: true });
     return;
   }
 
   if (fromPositionToEndCommand) {
-    addMessage("bot", commandHtml(fromPositionToEndCommand), { html: true });
+    addBotResponse(question, commandHtml(fromPositionToEndCommand), { html: true });
     return;
   }
 
   if (generatedLeadingCommand) {
-    addMessage("bot", commandHtml(generatedLeadingCommand), { html: true });
+    addBotResponse(question, commandHtml(generatedLeadingCommand), { html: true });
     return;
   }
 
   if (efDelayMatches.length > 0) {
-    addMessage("bot", efDelaysToHtml(efDelayMatches), { html: true });
+    addBotResponse(question, efDelaysToHtml(efDelayMatches), { html: true });
     return;
   }
 
   if (b5ModifierMatches.length > 0) {
-    addMessage("bot", b5ModifiersToHtml(b5ModifierMatches), { html: true });
+    addBotResponse(question, b5ModifiersToHtml(b5ModifierMatches), { html: true });
     return;
   }
 
   if (b5KeyMatches.length > 0) {
-    addMessage("bot", b5KeysToHtml(b5KeyMatches), { html: true });
+    addBotResponse(question, b5KeysToHtml(b5KeyMatches), { html: true });
     return;
   }
 
   if (matches.length === 0) {
     if (shouldAskClarification(intentUnderstanding)) {
-      addMessage("bot", buildClarificationHtml(intentUnderstanding), { html: true });
+      addBotResponse(question, buildClarificationHtml(intentUnderstanding), { html: true });
       return;
     }
 
-    addMessage("bot", barcodeUnavailableHtml, { html: true });
+    addBotResponse(question, barcodeUnavailableHtml, { html: true });
     return;
   }
 
   if (matches.length > 1) {
-    addMessage("bot", barcodeUnavailableHtml, { html: true });
+    addBotResponse(question, barcodeUnavailableHtml, { html: true });
     return;
   }
 
-  addMessage("bot", matches.map(commandHtml).join(""), { html: true });
+  addBotResponse(question, matches.map(commandHtml).join(""), { html: true });
 }
 
 function submitQuestion(question) {

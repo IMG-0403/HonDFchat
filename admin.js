@@ -12,6 +12,8 @@ const statusMessage = document.querySelector("#statusMessage");
 const logoutButton = document.querySelector("#logoutButton");
 const refreshButton = document.querySelector("#refreshButton");
 const resetButton = document.querySelector("#resetButton");
+const downloadLogButton = document.querySelector("#downloadLogButton");
+const chatLogStorageKey = "honDataFormatChatLogs";
 const fields = {
   id: document.querySelector("#recordId"),
   title: document.querySelector("#titleInput"),
@@ -70,6 +72,7 @@ logoutButton?.addEventListener("click", async () => {
 
 refreshButton?.addEventListener("click", loadRequests);
 resetButton?.addEventListener("click", resetForm);
+downloadLogButton?.addEventListener("click", downloadChatLogsCsv);
 
 requestForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -203,6 +206,91 @@ function resetForm() {
 
 function setStatus(message) {
   statusMessage.textContent = message;
+}
+
+async function downloadChatLogsCsv() {
+  setStatus("ログを読み込み中です...");
+  const logs = await getDownloadChatLogs();
+  if (logs.length === 0) {
+    setStatus("ダウンロードできるログはありません。");
+    return;
+  }
+
+  const header = ["日時", "質問入力内容", "Chatbot回答または聞き返し"];
+  const rows = logs.map((log) => [
+    formatDate(log.createdAt),
+    log.question || "",
+    log.answer || "",
+  ]);
+  const csv = [header, ...rows].map((row) => row.map(toCsvCell).join(",")).join("\r\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `chatbot-log-${formatFilenameDate(new Date())}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  setStatus(`${logs.length}件のログCSVをダウンロードしました。`);
+}
+
+async function getDownloadChatLogs() {
+  const remoteLogs = await getRemoteChatLogs();
+  if (remoteLogs.length > 0) return remoteLogs;
+  return getChatLogs();
+}
+
+async function getRemoteChatLogs() {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from("chatbot_logs")
+      .select("created_at,question,answer")
+      .order("created_at", { ascending: false })
+      .limit(10000);
+
+    if (error) {
+      setStatus(`Supabaseログを読み込めません。ローカルログを確認します: ${error.message}`);
+      return [];
+    }
+
+    return (data || []).map((log) => ({
+      createdAt: log.created_at,
+      question: log.question,
+      answer: log.answer,
+    }));
+  } catch (error) {
+    setStatus(`Supabaseログを読み込めません。ローカルログを確認します: ${error.message || ""}`);
+    return [];
+  }
+}
+
+function getChatLogs() {
+  try {
+    const logs = JSON.parse(localStorage.getItem(chatLogStorageKey) || "[]");
+    return Array.isArray(logs) ? logs : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function toCsvCell(value) {
+  return `"${String(value || "").replace(/"/g, '""')}"`;
+}
+
+function formatFilenameDate(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    "-",
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+  ].join("");
 }
 
 function splitKeywords(value) {

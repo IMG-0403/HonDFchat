@@ -76,7 +76,10 @@
         <section class="admin-card">
           <div class="admin-card-header">
             <h2>登録一覧</h2>
-            <button class="admin-button secondary" id="refreshButton" type="button">更新</button>
+            <div class="admin-actions">
+              <button class="admin-button secondary" id="downloadLogButton" type="button">ログCSVダウンロード</button>
+              <button class="admin-button secondary" id="refreshButton" type="button">更新</button>
+            </div>
           </div>
           <div class="admin-list" id="requestList"></div>
         </section>
@@ -86,6 +89,6 @@
     </main>
 
     <script src="config.js"></script>
-    <script type="module" src="admin.js?v=20260515-30"></script>
+    <script type="module" src="admin.js?v=20260518-2"></script>
   </body>
 </html>
