@@ -1355,27 +1355,27 @@ function getOperationTargetLabel(operation) {
 
 function buildLeadingCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const match = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,2})\s*桁/);
+  const match = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁/);
 
   if (!match || !/(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) return null;
 
   const characterCount = Number(match[1]);
-  if (!Number.isInteger(characterCount) || characterCount < 1 || characterCount > 99) return null;
+  if (!Number.isInteger(characterCount) || characterCount < 1 || characterCount > 9999) return null;
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengths = getReadLengths(normalizedQuery);
 
-  const countHex = characterCount.toString().padStart(2, "0");
+  const commandParts = splitSendCounts(characterCount).map((count) => `F2${String(count).padStart(2, "0")}00`);
+  const editorCommand = commandParts.join("");
   const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
   const labelTarget = readLengths.length > 0 ? `${readLengths.join("桁と")}桁バーコード限定で` : "全桁数で";
   const summaryTarget = readLengths.length > 0 ? `${readLengths.join("桁と")}桁のバーコードだけを対象に、` : "読取桁数を限定せず、";
   const lengthNote = readLengths.length > 0
     ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
     : "9999 は全桁数を表す指定です。";
-  const editorCommand = `F2${countHex}00`;
 
   return {
-    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-first-${countHex}`,
+    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-first-${characterCount}`,
     label: `${codeLabel}・${labelTarget}先頭${characterCount}桁を出力`,
     category: "登録例",
     summary: `${codeLabel}を対象に、${summaryTarget}読み取りデータの先頭${characterCount}桁のみを出力します。`,
@@ -1384,9 +1384,20 @@ function buildLeadingCharactersCommand(query) {
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       "複数条件は | で区切り、2件目以降は DFMBK3 を付けずに条件ブロックだけを連結します。",
-      `F2${countHex}00 は先頭から${characterCount}桁を送信する Data Format Editor コマンドです。`,
+      `${editorCommand} は先頭から${characterCount}桁を送信する Data Format Editor コマンドです。99桁を超える場合はF2を分割します。`,
     ],
   };
+}
+
+function splitSendCounts(totalCount) {
+  const counts = [];
+  let remaining = totalCount;
+  while (remaining > 0) {
+    const count = Math.min(99, remaining);
+    counts.push(count);
+    remaining -= count;
+  }
+  return counts;
 }
 
 function buildRangeCharactersCommand(query) {
