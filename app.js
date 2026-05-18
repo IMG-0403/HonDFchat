@@ -914,7 +914,9 @@ function buildCommonCommandIntent(question, structured = null) {
     .filter((condition) => condition.length !== 9999 || condition.source !== "default")
     .map((condition) => condition.length))];
   const actions = [];
-  const b5Action = buildB5AppendIntentAction(question);
+  const repeatedSuffixAction = buildRepeatedSuffixControlInsertIntentAction(question);
+  if (repeatedSuffixAction) actions.push(repeatedSuffixAction);
+  const b5Action = repeatedSuffixAction ? null : buildB5AppendIntentAction(question);
   if (b5Action) actions.push(b5Action);
   if (actions.length === 0 && structured?.operation) actions.push(...buildIntentActions(structured.operation));
 
@@ -926,10 +928,23 @@ function buildCommonCommandIntent(question, structured = null) {
   };
 }
 
+function buildRepeatedSuffixControlInsertIntentAction(query) {
+  const insertion = findRepeatedSuffixControlInsertion(query);
+  if (!insertion) return null;
+  return {
+    type: "suffix_repeated_character",
+    command: `F100F4${insertion.hex}${String(insertion.count).padStart(2, "0")}`,
+    hex: insertion.hex,
+    count: insertion.count,
+    label: insertion.label,
+  };
+}
+
 function buildB5AppendIntentAction(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
   if (!mentionsAppend) return null;
+  if (findRepeatedSuffixControlInsertion(query)) return null;
   if (hasPlainTextAppendTarget(query)) return null;
 
   const mentionsPrefix = ["先頭", "前", "最初", "プリフィックス", "prefix"].some((word) => normalizedQuery.includes(normalizeText(word)));
@@ -1813,6 +1828,7 @@ function findMultiPositionControlInsertions(query) {
 
 function findRepeatedSuffixControlInsertion(query) {
   const asciiQuery = normalizeAsciiText(query);
+  if (/\d{1,2}\s*桁目/.test(asciiQuery)) return null;
   const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
   const pattern = new RegExp(`(?:末尾|最後|データ末尾|サフィックス|suffix)?\\s*(${tokenPattern})\\s*(?:を)?\\s*(\\d{1,2})\\s*(?:回|個)\\s*(?:付加|追加|つける|付ける|挿入)`, "i");
   const match = asciiQuery.match(pattern);
@@ -2640,6 +2656,7 @@ function getExpectedEditorCommandsForAction(action) {
   if (action.type === "output_leading") {
     return [`F2${String(action.characterCount).padStart(2, "0")}00`];
   }
+  if (action.type === "suffix_repeated_character") return [action.command];
   if (action.type === "zero_suppress") return ["E630F100"];
   return [];
 }
