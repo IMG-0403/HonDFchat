@@ -904,11 +904,18 @@ function parseStructuredNlpRequest(query) {
     const deleteChars = findDeleteTargetCharacters(query);
     const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
     const deleteFromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+    const deleteLeadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁/);
     if (mentionsDelete && deleteChars.length > 0 && deleteFromMatch) {
       structured.operation = {
         type: "deleteFromPositionToEnd",
         chars: deleteChars,
         startPosition: Number(deleteFromMatch[1]),
+      };
+    } else if (mentionsDelete && deleteChars.length > 0 && deleteLeadingMatch && /(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) {
+      structured.operation = {
+        type: "deleteLeading",
+        chars: deleteChars,
+        characterCount: Number(deleteLeadingMatch[1]),
       };
     } else if (mentionsDelete && deleteChars.length > 0) {
       structured.operation = { type: "delete", chars: deleteChars };
@@ -933,7 +940,7 @@ function parseStructuredNlpRequest(query) {
   }
 
   if (!structured.operation) {
-    const leadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,2})\s*桁/);
+    const leadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁/);
     if (leadingMatch && /(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) {
       structured.operation = { type: "leading", characterCount: Number(leadingMatch[1]) };
     }
@@ -943,9 +950,10 @@ function parseStructuredNlpRequest(query) {
     const mentionsZeroSuppress = ["0サプレス", "0 サプレス", "ゼロサプレス", "ゼロ サプレス", "zero suppress"].some((word) =>
       normalizedQuery.includes(normalizeText(word))
     );
+    const mentionsStandaloneZero = /(^|[^\d])0($|[^\d])/.test(normalizedQuery) || ["ゼロ", "zero"].some((word) => normalizedQuery.includes(normalizeText(word)));
     const mentionsLeadingZeroRemove =
       ["先頭", "頭", "前方"].some((word) => normalizedQuery.includes(normalizeText(word))) &&
-      ["0", "ゼロ", "zero"].some((word) => normalizedQuery.includes(normalizeText(word))) &&
+      mentionsStandaloneZero &&
       ["削除", "除去", "消す", "消して", "取り除"].some((word) => normalizedQuery.includes(normalizeText(word)));
     if (mentionsZeroSuppress || mentionsLeadingZeroRemove) {
       structured.operation = { type: "zeroSuppress" };
@@ -1096,6 +1104,7 @@ function looksLikeDataFormatRequest(normalizedQuery) {
 function hasOperationTarget(operation) {
   if (!operation) return false;
   if (operation.type === "delete" || operation.type === "deleteFromPositionToEnd") return operation.chars.length > 0;
+  if (operation.type === "deleteLeading") return operation.chars.length > 0 && Number.isInteger(operation.characterCount);
   if (operation.type === "replace") return Boolean(operation.sourceChar && operation.targetChar);
   if (operation.type === "range") return operation.ranges.length > 0;
   if (operation.type === "fromPositionToEnd") return Number.isInteger(operation.startPosition);
@@ -1113,6 +1122,12 @@ function buildIntentActions(operation) {
     return [
       { type: "delete", targets: operation.chars.map(characterToRequestToken), hex: charsToHex(operation.chars) },
       { type: "output_from_position_to_end", startPosition: operation.startPosition },
+    ];
+  }
+  if (operation.type === "deleteLeading") {
+    return [
+      { type: "delete", targets: operation.chars.map(characterToRequestToken), hex: charsToHex(operation.chars) },
+      { type: "output_leading", characterCount: operation.characterCount },
     ];
   }
   if (operation.type === "replace") {
@@ -1156,6 +1171,10 @@ function buildCanonicalQueryFromStructuredNlp(structured) {
 
   if (operation.type === "deleteFromPositionToEnd") {
     return `${scopePrefix}${operation.chars.map(characterToRequestToken).join("と")}を削除して${operation.startPosition}桁目以降出力`;
+  }
+
+  if (operation.type === "deleteLeading") {
+    return `${scopePrefix}${operation.chars.map(characterToRequestToken).join("と")}を削除して先頭${operation.characterCount}桁出力`;
   }
 
   if (operation.type === "replace") {
@@ -1249,6 +1268,7 @@ function buildCommandFromStructuredNlp(question, intentUnderstanding = buildInte
   const builders = [
     buildReplaceThenRangeCommand,
     buildTrimLeadingZeroesCommand,
+    buildDeleteThenLeadingCommand,
     findExactSpaceTransformCommand,
     buildDeleteThenFromPositionToEndCommand,
     findExactDeleteCharacterCommand,
@@ -1335,6 +1355,7 @@ function getOperationLabel(operation) {
   const labels = {
     delete: "削除",
     deleteFromPositionToEnd: "削除後の指定桁以降出力",
+    deleteLeading: "削除後の先頭桁数出力",
     replace: "置換",
     range: "指定範囲出力",
     fromPositionToEnd: "指定桁以降出力",
@@ -1348,6 +1369,9 @@ function getOperationTargetLabel(operation) {
   if (!operation) return "";
   if (operation.type === "delete" || operation.type === "deleteFromPositionToEnd") {
     return operation.chars.map(describeReplaceCharacter).join("と");
+  }
+  if (operation.type === "deleteLeading") {
+    return `${operation.chars.map(describeReplaceCharacter).join("と")}、先頭${operation.characterCount}桁`;
   }
   if (operation.type === "replace") {
     return `${describeReplaceCharacter(operation.sourceChar)} から ${describeReplaceCharacter(operation.targetChar)}`;
@@ -1855,7 +1879,7 @@ function buildPrefixB5Command(query) {
 function buildTrimLeadingZeroesCommand(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsLeading = ["先頭", "頭", "前方"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsZero = ["0", "ゼロ", "zero"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsZero = /(^|[^\d])0($|[^\d])/.test(normalizedQuery) || ["ゼロ", "zero"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsRemove = ["削除", "除去", "消す", "消して", "取り除"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsOutput = ["出力", "送信", "表示"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsZeroSuppress = ["0サプレス", "0 サプレス", "ゼロサプレス", "ゼロ サプレス", "zero suppress"].some((word) =>
@@ -2829,7 +2853,7 @@ function getExpectedEditorCommandsForAction(action) {
     return [`F5${cursorHex}F100`];
   }
   if (action.type === "output_leading") {
-    return [`F2${String(action.characterCount).padStart(2, "0")}00`];
+    return splitSendCounts(action.characterCount).map((count) => `F2${String(count).padStart(2, "0")}00`);
   }
   if (action.type === "suffix_repeated_character") return [action.command];
   if (action.type === "zero_suppress") return ["E630F100"];
@@ -2842,6 +2866,12 @@ function getExpectedFullEditorCommands(actions) {
   if (deleteAction && fromAction) {
     const cursorHex = String(fromAction.startPosition - 1).padStart(2, "0");
     return [`FB${String((deleteAction.hex || "").length / 2).padStart(2, "0")}${deleteAction.hex}F7F5${cursorHex}F100`];
+  }
+
+  const leadingAction = actions.find((action) => action.type === "output_leading");
+  if (deleteAction && leadingAction) {
+    const outputCommand = splitSendCounts(leadingAction.characterCount).map((count) => `F2${String(count).padStart(2, "0")}00`).join("");
+    return [`FB${String((deleteAction.hex || "").length / 2).padStart(2, "0")}${deleteAction.hex}F7${outputCommand}`];
   }
 
   const rangeAction = actions.find((action) => action.type === "output_ranges");
@@ -3414,7 +3444,7 @@ function answerQuestion(question) {
   }
 
   if (deleteThenLeadingCommand) {
-    addBotResponse(question, commandHtml(deleteThenLeadingCommand), { html: true });
+    addBotResponse(question, commandToHtml(applyClearSettingsPrefix(deleteThenLeadingCommand, shouldClearSettings)), { html: true });
     return;
   }
 
