@@ -549,6 +549,8 @@ const welcomeText =
   "";
 
 let adminCommandCatalog = [];
+const prefixWords = ["先頭", "前", "最初", "プリフィックス", "プレフィックス", "prefix"];
+const suffixWords = ["末尾", "後ろ", "最後", "サフィックス", "suffix"];
 
 const messages = document.querySelector("#messages");
 const form = document.querySelector("#chatForm");
@@ -567,6 +569,7 @@ function normalizeText(value) {
   return value
     .toLowerCase()
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/プレフィックス/g, "プリフィックス")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -1070,8 +1073,8 @@ function buildB5AppendIntentAction(query) {
   if (findRepeatedSuffixControlInsertion(query)) return null;
   if (hasPlainTextAppendTarget(query)) return null;
 
-  const mentionsPrefix = ["先頭", "前", "最初", "プリフィックス", "prefix"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsSuffix = ["末尾", "後ろ", "最後", "サフィックス", "suffix"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsPrefix = prefixWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsSuffix = suffixWords.some((word) => normalizedQuery.includes(normalizeText(word)));
   if (!mentionsPrefix && !mentionsSuffix) return null;
 
   const key = findB5KeyForAppend(query);
@@ -1099,7 +1102,7 @@ function buildIntentContextSources() {
 
 function looksLikeDataFormatRequest(normalizedQuery) {
   if (!normalizedQuery) return false;
-  return /(読み取り|読取|バーコード|コード|qr|ocr|code|data\s*matrix|データフォーマット|桁|出力|送信|表示|削除|除去|置換|付加|追加|挿入|サプレス|プリフィックス|サフィックス|先頭|末尾|gs|f\d{1,2}|矢印)/i.test(normalizedQuery);
+  return /(読み取り|読取|バーコード|コード|qr|ocr|code|data\s*matrix|データフォーマット|桁|出力|送信|表示|削除|除去|置換|付加|追加|挿入|サプレス|プリフィックス|プレフィックス|サフィックス|先頭|末尾|gs|f\d{1,2}|矢印)/i.test(normalizedQuery);
 }
 
 function hasOperationTarget(operation) {
@@ -1368,7 +1371,7 @@ function getAmbiguousFunctionKeyAppend(query) {
   const normalizedQuery = normalizeText(query);
   const asciiQuery = normalizeAsciiText(query);
   const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word))) || normalizedQuery.includes("設定");
-  const mentionsPrefixOrSuffix = ["先頭", "前", "最初", "プリフィックス", "prefix", "末尾", "後ろ", "最後", "サフィックス", "suffix"].some((word) =>
+  const mentionsPrefixOrSuffix = [...prefixWords, ...suffixWords].some((word) =>
     normalizedQuery.includes(normalizeText(word))
   );
   if (!mentionsAppend || !mentionsPrefixOrSuffix) return "";
@@ -1931,7 +1934,7 @@ function buildSuffixB5Command(query) {
 
 function buildPrefixB5Command(query) {
   const normalizedQuery = normalizeText(query);
-  const mentionsPrefix = ["先頭", "前", "最初", "プリフィックス", "prefix"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsPrefix = prefixWords.some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
 
   if (!mentionsPrefix || !mentionsAppend || hasPlainTextAppendTarget(query)) return null;
@@ -2011,6 +2014,7 @@ function buildTrimLeadingZeroesCommand(query) {
 function normalizeAsciiText(value) {
   return String(value)
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/プレフィックス/g, "プリフィックス")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -2170,14 +2174,14 @@ function buildMultiPositionControlInsertCommand(query) {
 
 function hasPlainTextAppendTarget(query) {
   const asciiQuery = normalizeAsciiText(query);
-  return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:に|へ)?\s*[A-Za-z0-9]{2,20}\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i.test(asciiQuery);
+  return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|プレフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:に|へ)?\s*[A-Za-z0-9]{2,20}\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i.test(asciiQuery);
 }
 
 function findPrefixText(query) {
   const asciiQuery = normalizeAsciiText(query);
   const patterns = [
-    /(?:先頭|データ先頭|プリフィックス|prefix)\s*(?:に|へ)?\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i,
-    /(?:文字列)\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:先頭|データ先頭|プリフィックス|prefix).*(?:付加|追加|つける|付ける|挿入)/i,
+    /(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix)\s*(?:に|へ)?\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i,
+    /(?:文字列)\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix).*(?:付加|追加|つける|付ける|挿入)/i,
   ];
 
   for (const pattern of patterns) {
