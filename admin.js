@@ -8,10 +8,14 @@ const adminContent = document.querySelector("#adminContent");
 const loginForm = document.querySelector("#loginForm");
 const requestForm = document.querySelector("#requestForm");
 const requestList = document.querySelector("#requestList");
+const requestPagination = document.querySelector("#requestPagination");
+const requestPageInfo = document.querySelector("#requestPageInfo");
 const unregisteredList = document.querySelector("#unregisteredList");
 const statusMessage = document.querySelector("#statusMessage");
 const logoutButton = document.querySelector("#logoutButton");
 const refreshButton = document.querySelector("#refreshButton");
+const prevRequestPageButton = document.querySelector("#prevRequestPageButton");
+const nextRequestPageButton = document.querySelector("#nextRequestPageButton");
 const refreshUnregisteredButton = document.querySelector("#refreshUnregisteredButton");
 const resetButton = document.querySelector("#resetButton");
 const downloadLogButton = document.querySelector("#downloadLogButton");
@@ -32,6 +36,9 @@ const supabase = supabaseUrl && supabaseAnonKey
 const adminLoginMap = {
   imgtech: "imgtech@hon-data-format.local",
 };
+const requestPageSize = 5;
+let requestRows = [];
+let requestPageIndex = 0;
 
 adminContent.hidden = true;
 
@@ -76,6 +83,8 @@ logoutButton?.addEventListener("click", async () => {
 });
 
 refreshButton?.addEventListener("click", loadRequests);
+prevRequestPageButton?.addEventListener("click", () => changeRequestPage(-1));
+nextRequestPageButton?.addEventListener("click", () => changeRequestPage(1));
 refreshUnregisteredButton?.addEventListener("click", loadRequests);
 resetButton?.addEventListener("click", resetForm);
 downloadLogButton?.addEventListener("click", downloadChatLogsCsv);
@@ -125,16 +134,45 @@ async function loadRequests() {
   }
 
   const rows = data || [];
-  renderRequests(rows);
+  requestRows = rows;
+  requestPageIndex = 0;
+  renderRequestsPage();
   await loadUnregisteredLogs(rows);
   setStatus("");
+}
+
+function changeRequestPage(direction) {
+  const pageCount = getRequestPageCount();
+  requestPageIndex = Math.max(0, Math.min(pageCount - 1, requestPageIndex + direction));
+  renderRequestsPage();
+}
+
+function getRequestPageCount() {
+  return Math.max(1, Math.ceil(requestRows.length / requestPageSize));
+}
+
+function renderRequestsPage() {
+  const start = requestPageIndex * requestPageSize;
+  renderRequests(requestRows.slice(start, start + requestPageSize));
+  updateRequestPagination();
+}
+
+function updateRequestPagination() {
+  if (!requestPagination || !requestPageInfo) return;
+  const total = requestRows.length;
+  const pageCount = getRequestPageCount();
+  requestPagination.hidden = total <= requestPageSize;
+  requestPageInfo.textContent = `${requestPageIndex + 1} / ${pageCount}ページ（${total}件）`;
+  prevRequestPageButton.disabled = requestPageIndex <= 0;
+  nextRequestPageButton.disabled = requestPageIndex >= pageCount - 1;
 }
 
 function renderRequests(rows) {
   requestList.textContent = "";
 
-  if (rows.length === 0) {
+  if (requestRows.length === 0) {
     requestList.textContent = "登録はまだありません。";
+    updateRequestPagination();
     return;
   }
 
