@@ -3236,7 +3236,16 @@ function explainDataFormatCommandToHtml(rawCommand) {
     <div class="command-card">
       <div>
         <div class="command-title">設定コマンドの内容</div>
-        <div class="command-code"><span>${escapeHtml(command)}</span></div>
+        <div class="command-code">
+          <span>${escapeHtml(command)}</span>
+          <button
+            type="button"
+            class="copy-command"
+            data-command="${escapeHtml(command)}"
+            title="コマンドをコピー"
+            aria-label="コマンドをコピー"
+          >${icons.copy}</button>
+        </div>
       </div>
       ${command.startsWith("DFMDF3;") ? "<p>先頭の DFMDF3; により、現在のデータフォーマット設定を削除してから登録します。</p>" : ""}
       ${conditionHtml}
