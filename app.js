@@ -1358,7 +1358,7 @@ function buildFunctionKeyTextAmbiguityHtml(query) {
   return `
     <div class="command-card">
       <strong>確認が必要です</strong>
-      <p>${escapeHtml(key)}とは${escapeHtml(key)}キー入力ですか？それとも${escapeHtml(key[0])}と${escapeHtml(key.slice(1))}の文字入力ですか？</p>
+      <p>${escapeHtml(key)}はキー入力ですか？それとも文字入力ですか？</p>
       <p>キー入力の場合は「${escapeHtml(key)}キーを付加」、文字入力の場合は「文字列${escapeHtml(key)}を付加」と入力してください。</p>
     </div>
   `;
@@ -1367,7 +1367,7 @@ function buildFunctionKeyTextAmbiguityHtml(query) {
 function getAmbiguousFunctionKeyAppend(query) {
   const normalizedQuery = normalizeText(query);
   const asciiQuery = normalizeAsciiText(query);
-  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word))) || normalizedQuery.includes("設定");
   const mentionsPrefixOrSuffix = ["先頭", "前", "最初", "プリフィックス", "prefix", "末尾", "後ろ", "最後", "サフィックス", "suffix"].some((word) =>
     normalizedQuery.includes(normalizeText(word))
   );
