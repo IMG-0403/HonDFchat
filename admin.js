@@ -219,8 +219,9 @@ async function downloadChatLogsCsv() {
     return;
   }
 
-  const header = ["日時", "質問入力内容", "Chatbot回答または聞き返し"];
+  const header = ["バーコード生成結果", "日時", "質問入力内容", "Chatbot回答または聞き返し"];
   const rows = logs.map((log) => [
+    getBarcodeGenerationResult(log),
     formatDate(log.createdAt),
     log.question || "",
     log.answer || "",
@@ -263,6 +264,7 @@ async function getRemoteChatLogs() {
       createdAt: log.created_at,
       question: log.question,
       answer: log.answer,
+      barcodeGenerated: log.barcode_generated,
     }));
   } catch (error) {
     setStatus(`Supabaseログを読み込めません。ローカルログを確認します: ${error.message || ""}`);
@@ -277,6 +279,24 @@ function getChatLogs() {
   } catch (_error) {
     return [];
   }
+}
+
+function getBarcodeGenerationResult(log) {
+  if (typeof log.barcodeGenerated === "boolean") return log.barcodeGenerated ? "〇" : "✖";
+
+  const answer = String(log.answer || "");
+  const failedPatterns = [
+    "設定バーコードを生成できません",
+    "バーコード生成を停止",
+    "生成前チェックで確認が必要",
+    "確認が必要です",
+    "該当するデータフォーマット設定が見つかりません",
+  ];
+  if (failedPatterns.some((pattern) => answer.includes(pattern))) return "✖";
+
+  const hasBarcodeSection = answer.includes("設定用バーコード");
+  const hasSettingCommand = /DFM(?:BK3|DF3|DF|CL3)[A-Z0-9;|?.]*/i.test(answer);
+  return hasBarcodeSection && hasSettingCommand ? "〇" : "✖";
 }
 
 function toCsvCell(value) {
