@@ -561,6 +561,7 @@ const samplePrompt = document.querySelector(".sample-prompt");
 const scannerMark = document.querySelector(".scanner-mark");
 let adminClickCount = 0;
 let adminClickTimer = 0;
+let pendingClarification = null;
 
 function normalizeText(value) {
   return value
@@ -1381,6 +1382,68 @@ function getAmbiguousFunctionKeyAppend(query) {
   if (explicitKey || explicitText || hasModifier) return "";
 
   return match[1].toUpperCase();
+}
+
+function setPendingClarification(type, question, data = {}) {
+  pendingClarification = {
+    type,
+    question,
+    data,
+    createdAt: Date.now(),
+  };
+}
+
+function clearPendingClarification() {
+  pendingClarification = null;
+}
+
+function resolvePendingClarification(answer) {
+  if (!pendingClarification) return answer;
+
+  const pending = pendingClarification;
+  if (Date.now() - pending.createdAt > 10 * 60 * 1000) {
+    clearPendingClarification();
+    return answer;
+  }
+
+  if (pending.type === "function_key_text") {
+    const resolved = resolveFunctionKeyTextClarification(pending.question, answer, pending.data.key);
+    if (resolved) {
+      clearPendingClarification();
+      return resolved;
+    }
+    return answer;
+  }
+
+  if (pending.type === "general") {
+    clearPendingClarification();
+    return `${pending.question}、${answer}`;
+  }
+
+  clearPendingClarification();
+  return answer;
+}
+
+function resolveFunctionKeyTextClarification(originalQuestion, answer, key) {
+  const normalizedAnswer = normalizeText(answer);
+  const asciiAnswer = normalizeAsciiText(answer);
+  const keyPattern = new RegExp(`\\b${key}\\b`, "i");
+
+  const saysKey =
+    new RegExp(`\\b${key}\\s*(?:キー|key)`, "i").test(asciiAnswer) ||
+    ["キー", "キー入力", "key入力", "ファンクションキー", "function key"].some((word) => normalizedAnswer.includes(normalizeText(word)));
+  if (saysKey) {
+    return originalQuestion.replace(keyPattern, `${key}キー`);
+  }
+
+  const saysText =
+    new RegExp(`(?:文字列|文字|テキスト)\\s*${key}|${key}\\s*(?:の)?\\s*(?:文字列|文字|テキスト)|${key[0]}\\s*と\\s*${key.slice(1)}`, "i").test(asciiAnswer) ||
+    ["文字", "文字列", "文字入力", "テキスト", "テキスト入力"].some((word) => normalizedAnswer.includes(normalizeText(word)));
+  if (saysText) {
+    return originalQuestion.replace(keyPattern, `文字列${key}`);
+  }
+
+  return "";
 }
 
 function getOperationLabel(operation) {
@@ -3433,6 +3496,7 @@ function answerQuestion(question) {
   const matches = findMatches(question);
 
   if (functionKeyTextAmbiguityHtml) {
+    setPendingClarification("function_key_text", question, { key: getAmbiguousFunctionKeyAppend(question) });
     addBotResponse(question, functionKeyTextAmbiguityHtml, { html: true });
     return;
   }
@@ -3554,6 +3618,7 @@ function answerQuestion(question) {
 
   if (matches.length === 0) {
     if (shouldAskClarification(intentUnderstanding)) {
+      setPendingClarification("general", question, { intentUnderstanding });
       addBotResponse(question, buildClarificationHtml(intentUnderstanding), { html: true });
       return;
     }
@@ -3573,10 +3638,11 @@ function answerQuestion(question) {
 function submitQuestion(question) {
   const trimmed = question.trim();
   if (!trimmed) return;
+  const resolvedQuestion = resolvePendingClarification(trimmed);
 
   addMessage("user", trimmed);
   if (input) input.value = "";
-  window.setTimeout(() => answerQuestion(trimmed), 180);
+  window.setTimeout(() => answerQuestion(resolvedQuestion), 180);
 }
 
 function submitCommandItem(item) {
