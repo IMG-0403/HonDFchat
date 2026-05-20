@@ -476,6 +476,7 @@ function getChatLogs() {
 
 function getBarcodeGenerationResult(log) {
   if (typeof log.barcodeGenerated === "boolean") return log.barcodeGenerated ? "〇" : "✖";
+  if (isSettingCommandLog(log)) return "△";
 
   const answer = String(log.answer || "");
   const failedPatterns = [
@@ -490,6 +491,11 @@ function getBarcodeGenerationResult(log) {
   const hasBarcodeSection = answer.includes("設定用バーコード");
   const hasSettingCommand = /DFM(?:BK3|DF3|DF|CL3)[A-Z0-9;|?.]*/i.test(answer);
   return hasBarcodeSection && hasSettingCommand ? "〇" : "✖";
+}
+
+function isSettingCommandLog(log) {
+  const question = String(log.question || "").trim().replace(/\s+/g, "").toUpperCase();
+  return /^DFM(?:BK3|DF3|DF|CL3)|^DFMDF3[.;]?/.test(question);
 }
 
 function toCsvCell(value) {
