@@ -560,7 +560,7 @@ const clearButton = document.querySelector("#clearButton");
 const quickActions = document.querySelector("#quickActions");
 const categoryList = document.querySelector("#categoryList");
 const template = document.querySelector("#messageTemplate");
-const samplePrompt = document.querySelector(".sample-prompt");
+const samplePrompts = document.querySelectorAll ? document.querySelectorAll(".sample-prompt") : [];
 const scannerMark = document.querySelector(".scanner-mark");
 let adminClickCount = 0;
 let adminClickTimer = 0;
@@ -2175,13 +2175,14 @@ function buildMultiPositionControlInsertCommand(query) {
 
 function hasPlainTextAppendTarget(query) {
   const asciiQuery = normalizeAsciiText(query);
-  return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|プレフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:設定)?\s*(?:に|へ|で)?\s*(?:文字列)?\s*[A-Za-z0-9]{2,20}\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定)/i.test(asciiQuery);
+  return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|プレフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:設定)?\s*(?:に|へ|で)?\s*(?:文字列)?\s*[A-Za-z0-9]{2,20}\s*(?:の)?\s*(?:文字列入力|文字列)?\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定)/i.test(asciiQuery);
 }
 
 function findPrefixText(query) {
   const asciiQuery = normalizeAsciiText(query);
   const patterns = [
     /(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix)\s*(?:設定)?\s*(?:に|へ|で)?\s*文字列\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定)/i,
+    /(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix)\s*(?:設定)?\s*(?:に|へ|で)?\s*([A-Za-z0-9]{1,20})\s*(?:の)?\s*文字列入力\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定)?/i,
     /(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix)\s*(?:に|へ)?\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i,
     /(?:文字列)\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix).*(?:付加|追加|つける|付ける|挿入|設定)/i,
   ];
@@ -3738,8 +3739,10 @@ clearButton?.addEventListener("click", () => {
   input?.focus();
 });
 
-samplePrompt?.addEventListener("click", () => {
-  submitQuestion(samplePrompt.dataset.samplePrompt || "");
+samplePrompts.forEach((button) => {
+  button.addEventListener("click", () => {
+    submitQuestion(button.dataset.samplePrompt || "");
+  });
 });
 
 scannerMark?.addEventListener("click", () => {

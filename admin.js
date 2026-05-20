@@ -206,16 +206,16 @@ async function loadUnregisteredLogs(registeredRows) {
   if (!unregisteredList) return;
   unregisteredList.textContent = "未登録ログを確認中です...";
   const logs = await getDownloadChatLogs();
-  renderUnregisteredLogs(getUnregisteredFailedLogs(logs, registeredRows));
+  const suppressedQuestions = await getSuppressedUnregisteredQuestions();
+  renderUnregisteredLogs(getUnregisteredFailedLogs(logs, registeredRows, suppressedQuestions));
 }
 
-function getUnregisteredFailedLogs(logs, registeredRows) {
+function getUnregisteredFailedLogs(logs, registeredRows, suppressedQuestions = new Set()) {
   const registeredQuestions = new Set(
     registeredRows
       .map((row) => normalizeQuestionKey(row.request_text))
       .filter(Boolean)
   );
-  const suppressedQuestions = getSuppressedUnregisteredQuestions();
   const seen = new Set();
 
   return logs.filter((log) => {
@@ -338,12 +338,18 @@ async function deleteRequest(row) {
     setStatus(`削除できません: ${error.message}`);
     return;
   }
-  addSuppressedUnregisteredQuestion(row.request_text);
+  await addSuppressedUnregisteredQuestion(row.request_text);
   setStatus("削除しました。");
   await loadRequests();
 }
 
-function getSuppressedUnregisteredQuestions() {
+async function getSuppressedUnregisteredQuestions() {
+  const localQuestions = getLocalSuppressedUnregisteredQuestions();
+  const remoteQuestions = await getRemoteSuppressedUnregisteredQuestions();
+  return new Set([...localQuestions, ...remoteQuestions]);
+}
+
+function getLocalSuppressedUnregisteredQuestions() {
   try {
     const values = JSON.parse(localStorage.getItem(suppressedUnregisteredStorageKey) || "[]");
     return new Set(Array.isArray(values) ? values.map(normalizeQuestionKey).filter(Boolean) : []);
@@ -352,11 +358,36 @@ function getSuppressedUnregisteredQuestions() {
   }
 }
 
-function addSuppressedUnregisteredQuestion(question) {
+async function getRemoteSuppressedUnregisteredQuestions() {
+  try {
+    const { data, error } = await supabase
+      .from("suppressed_unregistered_questions")
+      .select("question_key")
+      .limit(10000);
+
+    if (error) return new Set();
+    return new Set((data || []).map((row) => normalizeQuestionKey(row.question_key)).filter(Boolean));
+  } catch (_error) {
+    return new Set();
+  }
+}
+
+async function addSuppressedUnregisteredQuestion(question) {
   const key = normalizeQuestionKey(question);
   if (!key) return;
-  const values = [...getSuppressedUnregisteredQuestions(), key];
+  const values = [...getLocalSuppressedUnregisteredQuestions(), key];
   localStorage.setItem(suppressedUnregisteredStorageKey, JSON.stringify([...new Set(values)].slice(-1000)));
+
+  try {
+    await supabase
+      .from("suppressed_unregistered_questions")
+      .upsert({
+        question_key: key,
+        question_text: String(question || "").trim(),
+      }, { onConflict: "question_key" });
+  } catch (_error) {
+    // Supabaseへ保存できない場合も、この端末ではローカル除外を継続します。
+  }
 }
 
 function resetForm() {
