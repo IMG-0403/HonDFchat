@@ -621,24 +621,51 @@ function getAllCommandCatalog() {
 }
 
 function getSymbologyTarget(normalizedQuery) {
+  const targets = getSymbologyTargets(normalizedQuery);
+  return targets[0]?.codeId === "99" ? null : targets[0];
+}
+
+function matchesSymbologyTerm(normalizedQuery, item) {
+  const terms = [item.codeId, item.label, ...(item.aliases || [])]
+    .map(normalizeText)
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
+  return terms.some((term) => {
+    if (/^[a-z0-9][a-z0-9 -]*$/i.test(term)) {
+      return new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}(?=$|[^a-z0-9]|\\d{1,4}\\s*桁)`, "i").test(normalizedQuery);
+    }
+    return normalizedQuery.includes(term);
+  });
+}
+
+function getSymbologyTargets(normalizedQuery) {
+  const targets = symbologyCodeTable.filter((item) => {
+    if (item.codeId === "99") return false;
+    return matchesSymbologyTerm(normalizedQuery, item);
+  });
+
+  if (targets.length <= 1) return targets.length > 0 ? targets : [symbologyCodeTable[0]];
+
+  const reducedTargets = targets.filter((target) => {
+    const targetTerms = [target.label, ...(target.aliases || [])].map(normalizeText).filter(Boolean);
+    return !targets.some((other) => {
+      if (other === target) return false;
+      const otherTerms = [other.label, ...(other.aliases || [])].map(normalizeText).filter(Boolean);
+      return otherTerms.some((otherTerm) => targetTerms.some((targetTerm) => otherTerm.length > targetTerm.length && otherTerm.includes(targetTerm)));
+    });
+  });
+
+  return reducedTargets.length > 0 ? reducedTargets : targets;
+}
+
+function getSymbologyTargetLegacy(normalizedQuery) {
   return symbologyCodeTable.find((item) => {
     const codeId = normalizeText(item.codeId);
     const label = normalizeText(item.label);
     const aliases = (item.aliases || []).map(normalizeText);
     return normalizedQuery.includes(codeId) || normalizedQuery.includes(label) || aliases.some((alias) => normalizedQuery.includes(alias));
   }) || null;
-}
-
-function getSymbologyTargets(normalizedQuery) {
-  const targets = symbologyCodeTable.filter((item) => {
-    if (item.codeId === "99") return false;
-    const codeId = normalizeText(item.codeId);
-    const label = normalizeText(item.label);
-    const aliases = (item.aliases || []).map(normalizeText);
-    return normalizedQuery.includes(codeId) || normalizedQuery.includes(label) || aliases.some((alias) => normalizedQuery.includes(alias));
-  });
-
-  return targets.length > 0 ? targets : [symbologyCodeTable[0]];
 }
 
 function buildDataFormatCommandFromBlocks(blocks) {
