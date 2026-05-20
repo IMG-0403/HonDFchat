@@ -1350,6 +1350,39 @@ function buildClarificationHtml(intentUnderstanding) {
   `;
 }
 
+function buildFunctionKeyTextAmbiguityHtml(query) {
+  const key = getAmbiguousFunctionKeyAppend(query);
+  if (!key) return "";
+
+  return `
+    <div class="command-card">
+      <strong>確認が必要です</strong>
+      <p>${escapeHtml(key)}とは${escapeHtml(key)}キー入力ですか？それとも${escapeHtml(key[0])}と${escapeHtml(key.slice(1))}の文字入力ですか？</p>
+      <p>キー入力の場合は「${escapeHtml(key)}キーを付加」、文字入力の場合は「文字列${escapeHtml(key)}を付加」と入力してください。</p>
+    </div>
+  `;
+}
+
+function getAmbiguousFunctionKeyAppend(query) {
+  const normalizedQuery = normalizeText(query);
+  const asciiQuery = normalizeAsciiText(query);
+  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsPrefixOrSuffix = ["先頭", "前", "最初", "プリフィックス", "prefix", "末尾", "後ろ", "最後", "サフィックス", "suffix"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  );
+  if (!mentionsAppend || !mentionsPrefixOrSuffix) return "";
+
+  const match = asciiQuery.match(/\b(f(?:1[0-2]|[1-9]))\b/i);
+  if (!match) return "";
+
+  const explicitKey = new RegExp(`\\b${match[1]}\\s*(?:キー|key)`, "i").test(asciiQuery);
+  const explicitText = new RegExp(`(?:文字列|文字|テキスト)\\s*${match[1]}|${match[1]}\\s*(?:の)?\\s*(?:文字列|文字|テキスト)|${match[1][0]}\\s*と\\s*${match[1].slice(1)}`, "i").test(asciiQuery);
+  const hasModifier = ["ctrl", "control", "コントロール", "alt", "shift"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  if (explicitKey || explicitText || hasModifier) return "";
+
+  return match[1].toUpperCase();
+}
+
 function getOperationLabel(operation) {
   if (!operation) return "未分類";
   const labels = {
@@ -3373,6 +3406,7 @@ function answerQuestion(question) {
   const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
   const intentUnderstanding = buildIntentUnderstanding(question);
   const commandHtml = (item) => commandToHtml(validateGeneratedCommand(applyClearSettingsPrefix(item, shouldClearSettings), intentUnderstanding));
+  const functionKeyTextAmbiguityHtml = buildFunctionKeyTextAmbiguityHtml(question);
   const multiClauseCommand = buildMultiClauseCommand(question);
   const structuredNlpCommand = buildCommandFromStructuredNlp(question, intentUnderstanding);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
@@ -3397,6 +3431,11 @@ function answerQuestion(question) {
   const b5ModifierMatches = findB5Modifiers(question);
   const b5KeyMatches = findB5Keys(question);
   const matches = findMatches(question);
+
+  if (functionKeyTextAmbiguityHtml) {
+    addBotResponse(question, functionKeyTextAmbiguityHtml, { html: true });
+    return;
+  }
 
   if (multiClauseCommand) {
     addBotResponse(question, commandHtml(multiClauseCommand), { html: true });
