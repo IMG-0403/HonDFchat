@@ -3023,6 +3023,31 @@ function getB5ModifierLabelByHex(hex) {
   return b5ModifierTable.find((item) => item.hex.toUpperCase() === hex.toUpperCase())?.label || `修飾キー ${hex}`;
 }
 
+function describeHexCharacter(hex) {
+  const normalizedHex = String(hex || "").toUpperCase();
+  const labels = {
+    "08": "BS",
+    "09": "TAB",
+    "0D": "CR",
+    "1B": "ESC",
+    "1D": "GS",
+    "20": "スペース",
+    "23": "#",
+    "2C": "カンマ",
+    "2D": "ハイフン",
+    "2E": "ピリオド",
+    "2F": "スラッシュ",
+  };
+  if (labels[normalizedHex]) return labels[normalizedHex];
+
+  const codePoint = parseInt(normalizedHex, 16);
+  if (Number.isFinite(codePoint) && codePoint >= 0x21 && codePoint <= 0x7e) {
+    return String.fromCharCode(codePoint);
+  }
+
+  return normalizedHex;
+}
+
 function isDataFormatCommandText(value) {
   const command = value.trim().toUpperCase();
   return /^DFM(?:BK3|DF3|DF|CL3)|^DFMDF3[.;]?/.test(command);
@@ -3099,8 +3124,16 @@ function describeEditorCommands(commandHex) {
 
     if (code === "E4" && index + 4 <= commandHex.length) {
       const count = Number(commandHex.slice(index + 2, index + 4));
-      const length = 4 + count * 4;
-      descriptions.push(`${commandHex.slice(index, index + length)}: ${count}種類のキャラクタを置換します。`);
+      const length = 4 + count * 2;
+      const pairs = [];
+      let offset = index + 4;
+      for (let pairIndex = 0; pairIndex < Math.floor(count / 2) && offset + 4 <= commandHex.length; pairIndex += 1) {
+        const sourceHex = commandHex.slice(offset, offset + 2).toUpperCase();
+        const targetHex = commandHex.slice(offset + 2, offset + 4).toUpperCase();
+        pairs.push(`${describeHexCharacter(sourceHex)}を${describeHexCharacter(targetHex)}に置換します。`);
+        offset += 4;
+      }
+      descriptions.push(`${commandHex.slice(index, index + length)}: ${pairs.join("、")}`);
       index += length;
       continue;
     }
@@ -3119,7 +3152,14 @@ function describeEditorCommands(commandHex) {
     if (code === "FB" && index + 4 <= commandHex.length) {
       const count = Number(commandHex.slice(index + 2, index + 4));
       const length = 4 + count * 2;
-      descriptions.push(`${commandHex.slice(index, index + length)}: ${count}種類のキャラクタを無効化します。`);
+      const targets = [];
+      let offset = index + 4;
+      for (let targetIndex = 0; targetIndex < count && offset + 2 <= commandHex.length; targetIndex += 1) {
+        const targetHex = commandHex.slice(offset, offset + 2).toUpperCase();
+        targets.push(`${describeHexCharacter(targetHex)}のキャラクタを無効化します。`);
+        offset += 2;
+      }
+      descriptions.push(`${commandHex.slice(index, index + length)}: ${targets.join("、")}`);
       index += length;
       continue;
     }
