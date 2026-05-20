@@ -261,6 +261,7 @@ async function createDraftFromLog(log) {
   if (!question) return;
 
   setStatus("未登録ログから下書きを作成中です...");
+  await addSuppressedUnregisteredQuestion(question);
   const { error } = await supabase.from("barcode_requests").insert({
     title: question,
     request_text: question,
@@ -384,7 +385,7 @@ async function addSuppressedUnregisteredQuestion(question) {
       .upsert({
         question_key: key,
         question_text: String(question || "").trim(),
-      }, { onConflict: "question_key" });
+      }, { onConflict: "question_key", ignoreDuplicates: true });
   } catch (_error) {
     // Supabaseへ保存できない場合も、この端末ではローカル除外を継続します。
   }
