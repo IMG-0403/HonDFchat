@@ -551,6 +551,7 @@ const welcomeText =
 let adminCommandCatalog = [];
 const prefixWords = ["先頭", "前", "最初", "プリフィックス", "プレフィックス", "prefix"];
 const suffixWords = ["末尾", "後ろ", "最後", "サフィックス", "suffix"];
+const settingAppendWords = [...appendWords, "設定"];
 
 const messages = document.querySelector("#messages");
 const form = document.querySelector("#chatForm");
@@ -1068,7 +1069,7 @@ function buildRepeatedSuffixControlInsertIntentAction(query) {
 
 function buildB5AppendIntentAction(query) {
   const normalizedQuery = normalizeText(query);
-  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = settingAppendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
   if (!mentionsAppend) return null;
   if (findRepeatedSuffixControlInsertion(query)) return null;
   if (hasPlainTextAppendTarget(query)) return null;
@@ -1892,7 +1893,7 @@ function buildSuffixB5Command(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsModifier = ["ctrl", "control", "コントロール", "alt", "shift"].some((word) => normalizedQuery.includes(normalizeText(word)));
   const mentionsSuffix = ["末尾", "後ろ", "最後", "サフィックス", "suffix"].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = settingAppendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
 
   if (!mentionsSuffix || !mentionsAppend || hasPlainTextAppendTarget(query)) return null;
 
@@ -1935,7 +1936,7 @@ function buildSuffixB5Command(query) {
 function buildPrefixB5Command(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsPrefix = prefixWords.some((word) => normalizedQuery.includes(normalizeText(word)));
-  const mentionsAppend = appendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = settingAppendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
 
   if (!mentionsPrefix || !mentionsAppend || hasPlainTextAppendTarget(query)) return null;
 
@@ -2174,14 +2175,15 @@ function buildMultiPositionControlInsertCommand(query) {
 
 function hasPlainTextAppendTarget(query) {
   const asciiQuery = normalizeAsciiText(query);
-  return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|プレフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:に|へ)?\s*[A-Za-z0-9]{2,20}\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i.test(asciiQuery);
+  return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|プレフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:設定)?\s*(?:に|へ|で)?\s*(?:文字列)?\s*[A-Za-z0-9]{2,20}\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定)/i.test(asciiQuery);
 }
 
 function findPrefixText(query) {
   const asciiQuery = normalizeAsciiText(query);
   const patterns = [
+    /(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix)\s*(?:設定)?\s*(?:に|へ|で)?\s*文字列\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定)/i,
     /(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix)\s*(?:に|へ)?\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入)/i,
-    /(?:文字列)\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix).*(?:付加|追加|つける|付ける|挿入)/i,
+    /(?:文字列)\s*([A-Za-z0-9]{1,20})\s*(?:を)?\s*(?:先頭|データ先頭|プリフィックス|プレフィックス|prefix).*(?:付加|追加|つける|付ける|挿入|設定)/i,
   ];
 
   for (const pattern of patterns) {
@@ -2195,7 +2197,7 @@ function findPrefixText(query) {
 function buildPrefixTextCommand(query) {
   const normalizedQuery = normalizeText(query);
   const prefixText = findPrefixText(query);
-  const mentionsOutput = /(出力|送信|表示|読み取り|読取)/.test(normalizedQuery);
+  const mentionsOutput = /(出力|送信|表示|読み取り|読取|設定)/.test(normalizedQuery);
   if (!prefixText || !mentionsOutput) return null;
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
