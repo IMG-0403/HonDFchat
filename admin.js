@@ -20,6 +20,7 @@ const refreshUnregisteredButton = document.querySelector("#refreshUnregisteredBu
 const resetButton = document.querySelector("#resetButton");
 const downloadLogButton = document.querySelector("#downloadLogButton");
 const chatLogStorageKey = "honDataFormatChatLogs";
+const suppressedUnregisteredStorageKey = "honDataFormatSuppressedUnregisteredQuestions";
 const fields = {
   id: document.querySelector("#recordId"),
   title: document.querySelector("#titleInput"),
@@ -196,7 +197,7 @@ function renderRequests(rows) {
     `;
 
     item.querySelector('[data-action="edit"]').addEventListener("click", () => fillForm(row));
-    item.querySelector('[data-action="delete"]').addEventListener("click", () => deleteRequest(row.id));
+    item.querySelector('[data-action="delete"]').addEventListener("click", () => deleteRequest(row));
     requestList.append(item);
   });
 }
@@ -214,11 +215,12 @@ function getUnregisteredFailedLogs(logs, registeredRows) {
       .map((row) => normalizeQuestionKey(row.request_text))
       .filter(Boolean)
   );
+  const suppressedQuestions = getSuppressedUnregisteredQuestions();
   const seen = new Set();
 
   return logs.filter((log) => {
     const key = normalizeQuestionKey(log.question);
-    if (!key || seen.has(key) || registeredQuestions.has(key)) return false;
+    if (!key || seen.has(key) || registeredQuestions.has(key) || suppressedQuestions.has(key)) return false;
     if (getBarcodeGenerationResult(log) !== "✖") return false;
     seen.add(key);
     return true;
@@ -329,15 +331,32 @@ function fillForm(row) {
   fields.requestText.focus();
 }
 
-async function deleteRequest(id) {
+async function deleteRequest(row) {
   if (!window.confirm("削除しますか？")) return;
-  const { error } = await supabase.from("barcode_requests").delete().eq("id", id);
+  const { error } = await supabase.from("barcode_requests").delete().eq("id", row.id);
   if (error) {
     setStatus(`削除できません: ${error.message}`);
     return;
   }
+  addSuppressedUnregisteredQuestion(row.request_text);
   setStatus("削除しました。");
   await loadRequests();
+}
+
+function getSuppressedUnregisteredQuestions() {
+  try {
+    const values = JSON.parse(localStorage.getItem(suppressedUnregisteredStorageKey) || "[]");
+    return new Set(Array.isArray(values) ? values.map(normalizeQuestionKey).filter(Boolean) : []);
+  } catch (_error) {
+    return new Set();
+  }
+}
+
+function addSuppressedUnregisteredQuestion(question) {
+  const key = normalizeQuestionKey(question);
+  if (!key) return;
+  const values = [...getSuppressedUnregisteredQuestions(), key];
+  localStorage.setItem(suppressedUnregisteredStorageKey, JSON.stringify([...new Set(values)].slice(-1000)));
 }
 
 function resetForm() {
