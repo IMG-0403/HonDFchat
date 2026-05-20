@@ -8,9 +8,11 @@ const adminContent = document.querySelector("#adminContent");
 const loginForm = document.querySelector("#loginForm");
 const requestForm = document.querySelector("#requestForm");
 const requestList = document.querySelector("#requestList");
+const unregisteredList = document.querySelector("#unregisteredList");
 const statusMessage = document.querySelector("#statusMessage");
 const logoutButton = document.querySelector("#logoutButton");
 const refreshButton = document.querySelector("#refreshButton");
+const refreshUnregisteredButton = document.querySelector("#refreshUnregisteredButton");
 const resetButton = document.querySelector("#resetButton");
 const downloadLogButton = document.querySelector("#downloadLogButton");
 const chatLogStorageKey = "honDataFormatChatLogs";
@@ -74,6 +76,7 @@ logoutButton?.addEventListener("click", async () => {
 });
 
 refreshButton?.addEventListener("click", loadRequests);
+refreshUnregisteredButton?.addEventListener("click", loadRequests);
 resetButton?.addEventListener("click", resetForm);
 downloadLogButton?.addEventListener("click", downloadChatLogsCsv);
 
@@ -121,7 +124,9 @@ async function loadRequests() {
     return;
   }
 
-  renderRequests(data || []);
+  const rows = data || [];
+  renderRequests(rows);
+  await loadUnregisteredLogs(rows);
   setStatus("");
 }
 
@@ -156,6 +161,102 @@ function renderRequests(rows) {
     item.querySelector('[data-action="delete"]').addEventListener("click", () => deleteRequest(row.id));
     requestList.append(item);
   });
+}
+
+async function loadUnregisteredLogs(registeredRows) {
+  if (!unregisteredList) return;
+  unregisteredList.textContent = "未登録ログを確認中です...";
+  const logs = await getDownloadChatLogs();
+  renderUnregisteredLogs(getUnregisteredFailedLogs(logs, registeredRows));
+}
+
+function getUnregisteredFailedLogs(logs, registeredRows) {
+  const registeredQuestions = new Set(
+    registeredRows
+      .map((row) => normalizeQuestionKey(row.request_text))
+      .filter(Boolean)
+  );
+  const seen = new Set();
+
+  return logs.filter((log) => {
+    const key = normalizeQuestionKey(log.question);
+    if (!key || seen.has(key) || registeredQuestions.has(key)) return false;
+    if (getBarcodeGenerationResult(log) !== "✖") return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function renderUnregisteredLogs(logs) {
+  unregisteredList.textContent = "";
+
+  if (logs.length === 0) {
+    unregisteredList.textContent = "未登録の生成失敗ログはありません。";
+    return;
+  }
+
+  logs.forEach((log) => {
+    const item = document.createElement("article");
+    item.className = "admin-list-item admin-list-item-unregistered";
+    item.innerHTML = `
+      <div>
+        <strong>${escapeHtml(log.question || "")}</strong>
+        <span>✖ / ${escapeHtml(formatDate(log.createdAt))}</span>
+      </div>
+      <p>${escapeHtml(log.answer || "")}</p>
+      <div class="admin-actions">
+        <button class="admin-button secondary" type="button" data-action="create-draft">設定コマンド空白で登録</button>
+        <button class="admin-button secondary" type="button" data-action="fill-form">入力欄へ反映</button>
+      </div>
+    `;
+
+    item.querySelector('[data-action="create-draft"]').addEventListener("click", () => createDraftFromLog(log));
+    item.querySelector('[data-action="fill-form"]').addEventListener("click", () => fillFormFromLog(log));
+    unregisteredList.append(item);
+  });
+}
+
+async function createDraftFromLog(log) {
+  const question = String(log.question || "").trim();
+  if (!question) return;
+
+  setStatus("未登録ログから下書きを作成中です...");
+  const { error } = await supabase.from("barcode_requests").insert({
+    title: question,
+    request_text: question,
+    command: "",
+    keywords: [],
+    notes: buildLogCandidateNotes(log),
+    status: "draft",
+  });
+
+  if (error) {
+    setStatus(`下書きを作成できません: ${error.message}`);
+    return;
+  }
+
+  setStatus("設定コマンド空白の下書きを作成しました。");
+  await loadRequests();
+}
+
+function fillFormFromLog(log) {
+  resetForm();
+  fields.title.value = String(log.question || "").trim();
+  fields.requestText.value = String(log.question || "").trim();
+  fields.command.value = "";
+  fields.keywords.value = "";
+  fields.notes.value = buildLogCandidateNotes(log);
+  fields.status.value = "draft";
+  fields.command.focus();
+}
+
+function buildLogCandidateNotes(log) {
+  const parts = [
+    "Chatbot生成失敗ログから自動作成",
+    `日時: ${formatDate(log.createdAt)}`,
+    `回答: ${String(log.answer || "").trim()}`,
+  ];
+  return parts.filter(Boolean).join("\n");
 }
 
 function getStatusClass(status) {
@@ -264,12 +365,15 @@ async function getRemoteChatLogs() {
       createdAt: log.created_at,
       question: log.question,
       answer: log.answer,
-      barcodeGenerated: log.barcode_generated,
     }));
   } catch (error) {
     setStatus(`Supabaseログを読み込めません。ローカルログを確認します: ${error.message || ""}`);
     return [];
   }
+}
+
+function normalizeQuestionKey(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function getChatLogs() {

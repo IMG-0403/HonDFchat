@@ -569,6 +569,10 @@ h2 {
   min-height: 0;
 }
 
+.admin-card-full {
+  grid-column: 1 / -1;
+}
+
 .admin-list-card {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -627,6 +631,10 @@ h2 {
   overflow: auto;
 }
 
+.admin-list-compact {
+  max-height: 320px;
+}
+
 .admin-list-item {
   display: grid;
   gap: 8px;
@@ -641,6 +649,17 @@ h2 {
   border-color: #b8c1bc;
   background: #dfe5e2;
   color: #56605c;
+}
+
+.admin-list-item.admin-list-item-published,
+.admin-list-item[data-status="published"] {
+  border-color: rgba(0, 120, 108, 0.34);
+  background: #d9f0ea;
+}
+
+.admin-list-item-unregistered {
+  border-color: rgba(155, 77, 18, 0.35);
+  background: #fffaf3;
 }
 
 .admin-list-item.admin-list-item-archived code,
