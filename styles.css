@@ -160,6 +160,16 @@ h2 {
   line-height: 1.45;
 }
 
+.sample-prompt code {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(18, 37, 32, 0.92);
+  color: #f4fffb;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .panel {
   display: grid;
   gap: 12px;
