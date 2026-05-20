@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>HON DATA FORMAT Admin</title>
-    <link rel="stylesheet" href="styles.css?v=20260520-6" />
+    <link rel="stylesheet" href="styles.css?v=20260520-7" />
   </head>
   <body class="admin-page">
     <main class="admin-shell">
@@ -37,6 +37,14 @@
       </section>
 
       <section class="admin-content" id="adminContent" hidden>
+        <section class="admin-card admin-card-full">
+          <div class="admin-card-header">
+            <h2>未登録一覧</h2>
+            <button class="admin-button secondary" id="refreshUnregisteredButton" type="button">未登録ログ更新</button>
+          </div>
+          <div class="admin-list admin-list-compact" id="unregisteredList"></div>
+        </section>
+
         <section class="admin-card admin-list-card">
           <div class="admin-card-header">
             <h2>依頼設定内容を登録</h2>
@@ -88,20 +96,12 @@
             <button class="admin-button secondary" id="nextRequestPageButton" type="button">次へ</button>
           </div>
         </section>
-
-        <section class="admin-card admin-card-full">
-          <div class="admin-card-header">
-            <h2>未登録一覧</h2>
-            <button class="admin-button secondary" id="refreshUnregisteredButton" type="button">未登録ログ更新</button>
-          </div>
-          <div class="admin-list admin-list-compact" id="unregisteredList"></div>
-        </section>
       </section>
 
       <p class="admin-status" id="statusMessage" role="status"></p>
     </main>
 
     <script src="config.js"></script>
-    <script type="module" src="admin.js?v=20260520-6"></script>
+    <script type="module" src="admin.js?v=20260520-7"></script>
   </body>
 </html>
