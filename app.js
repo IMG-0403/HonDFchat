@@ -853,6 +853,7 @@ function buildSingleClauseCommand(clause) {
     buildMultiPositionControlInsertCommand,
     buildInsertTextAtPositionCommand,
     buildPrefixTextCommand,
+    buildSuffixTextCommand,
     buildPrefixB5Command,
     buildSuffixB5Command,
     buildSymbologyDelayKeyCommand,
@@ -2145,6 +2146,37 @@ function stringToAsciiHex(value) {
   return [...value].map((char) => char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).join("");
 }
 
+function encodeAppendTextWithControlTokens(value) {
+  const asciiValue = normalizeAsciiText(value).replace(/\s*\+\s*/g, "+");
+  if (!asciiValue) return null;
+
+  const hexParts = [];
+  const labelParts = [];
+  const parts = asciiValue.split("+").filter(Boolean);
+  if (parts.length === 0) return null;
+
+  for (const part of parts) {
+    const control = normalizeInsertControlToken(part);
+    if (control && /^[A-Za-z]+$/.test(part)) {
+      hexParts.push(control.hex);
+      labelParts.push(control.label);
+      continue;
+    }
+
+    if (!/^[\x20-\x7E]+$/.test(part)) return null;
+    hexParts.push(stringToAsciiHex(part));
+    labelParts.push(part);
+  }
+
+  const byteCount = hexParts.join("").length / 2;
+  if (byteCount < 1 || byteCount > 9999) return null;
+  return {
+    label: labelParts.join("+"),
+    hex: hexParts.join(""),
+    byteCount,
+  };
+}
+
 function normalizeInsertControlToken(value) {
   const normalized = normalizeText(value);
   if (["tab", "タブ", "ht"].includes(normalized)) return { label: "TAB", hex: "09" };
@@ -2296,7 +2328,9 @@ function buildMultiPositionControlInsertCommand(query) {
 
 function hasPlainTextAppendTarget(query) {
   const asciiQuery = normalizeAsciiText(query);
-  return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|プレフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:設定)?\s*(?:に|へ|で)?\s*(?:文字列)?\s*[A-Za-z0-9]{2,20}\s*(?:の)?\s*(?:文字列入力|文字列)?\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定)/i.test(asciiQuery);
+  if (/(?:ctrl|control|コントロール|alt|shift)/i.test(asciiQuery)) return false;
+  if (/(?:^|[^A-Za-z0-9])F(?:1[0-2]|[1-9])\s*(?:キー|key)/i.test(asciiQuery)) return false;
+  return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|プレフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:設定)?\s*(?:に|へ|で)?\s*(?:文字列)?\s*[A-Za-z0-9+ ]{2,40}\s*(?:の)?\s*(?:文字列入力|文字列)?\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定|の場合)?/i.test(asciiQuery);
 }
 
 function findPrefixText(query) {
@@ -2344,6 +2378,56 @@ function buildPrefixTextCommand(query) {
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `BA${textLength}${textHex} は ${prefixText} を現在位置、つまりデータ先頭に挿入する指定です。`,
       "F100 は挿入後に読み取りデータを全て出力する指定です。",
+    ],
+  };
+}
+
+function findSuffixText(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  const tokenPattern = "[A-Za-z0-9][A-Za-z0-9+ ]{0,40}";
+  const patterns = [
+    new RegExp(`(?:末尾|データ末尾|サフィックス|suffix)\\s*(?:設定)?\\s*(?:に|へ|で)?\\s*(?:文字列)?\\s*(${tokenPattern})\\s*(?:の)?\\s*(?:文字列入力|文字列)?\\s*(?:を)?\\s*(?:付加|追加|つける|付ける|挿入|設定|の場合)?`, "i"),
+    new RegExp(`(?:文字列)\\s*(${tokenPattern})\\s*(?:を)?\\s*(?:末尾|データ末尾|サフィックス|suffix).*(?:付加|追加|つける|付ける|挿入|設定)`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = asciiQuery.match(pattern);
+    if (!match) continue;
+    const text = match[1].trim().replace(/\s+/g, "");
+    if (encodeAppendTextWithControlTokens(text)) return text;
+  }
+
+  return "";
+}
+
+function buildSuffixTextCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const suffixText = findSuffixText(query);
+  const encoded = suffixText ? encodeAppendTextWithControlTokens(suffixText) : null;
+  const mentionsOutput = /(出力|送信|表示|読み取り|読取|設定|場合)/.test(normalizedQuery);
+  if (!encoded || !mentionsOutput) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const textLength = String(encoded.byteCount).padStart(4, "0");
+  const editorCommand = `F100BA${textLength}${encoded.hex}`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-suffix-text-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${encoded.hex}`,
+    label: `${codeLabel}・${lengthLabel} 末尾に${encoded.label}を付加して出力`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、読み取りデータの末尾へ${encoded.label}を付加して出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      "F100 は読み取りデータを全て出力する指定です。",
+      `BA${textLength}${encoded.hex} は ${encoded.label} をデータ末尾に挿入する指定です。`,
     ],
   };
 }
@@ -3809,6 +3893,7 @@ async function answerQuestion(question) {
   const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
   const prefixB5Command = buildPrefixB5Command(question);
   const prefixTextCommand = buildPrefixTextCommand(question);
+  const suffixTextCommand = buildSuffixTextCommand(question);
   const suffixB5Command = buildSuffixB5Command(question);
   const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
   const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
@@ -3873,6 +3958,11 @@ async function answerQuestion(question) {
 
   if (prefixTextCommand) {
     addBotResponse(originalQuestion, commandHtml(prefixTextCommand), { html: true });
+    return;
+  }
+
+  if (suffixTextCommand) {
+    addBotResponse(originalQuestion, commandHtml(suffixTextCommand), { html: true });
     return;
   }
 
