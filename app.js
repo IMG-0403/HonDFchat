@@ -1114,6 +1114,20 @@ function buildCommonCommandIntent(question, structured = null) {
   };
 }
 
+function shouldUseLlmCanonicalQuery(originalQuestion, canonicalQuery) {
+  const originalConditions = buildTargetConditions(normalizeText(originalQuestion));
+  const canonicalConditions = buildTargetConditions(normalizeText(canonicalQuery));
+  const originalConditionKeys = new Set(originalConditions.map((condition) => `${condition.codeId}-${condition.lengthField}`));
+  const canonicalConditionKeys = new Set(canonicalConditions.map((condition) => `${condition.codeId}-${condition.lengthField}`));
+
+  if (originalConditionKeys.size > canonicalConditionKeys.size) return false;
+  for (const key of originalConditionKeys) {
+    if (!canonicalConditionKeys.has(key)) return false;
+  }
+
+  return true;
+}
+
 function buildRepeatedSuffixControlInsertIntentAction(query) {
   const insertion = findRepeatedSuffixControlInsertion(query);
   if (!insertion) return null;
@@ -3995,7 +4009,12 @@ async function answerQuestion(question) {
     return;
   }
 
-  if (llmIntent?.intent === "data_format_setting" && llmIntent.confidence >= 0.7 && llmIntent.canonicalQuery) {
+  if (
+    llmIntent?.intent === "data_format_setting" &&
+    llmIntent.confidence >= 0.7 &&
+    llmIntent.canonicalQuery &&
+    shouldUseLlmCanonicalQuery(question, llmIntent.canonicalQuery)
+  ) {
     question = llmIntent.canonicalQuery;
   }
 
