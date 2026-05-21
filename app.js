@@ -620,6 +620,17 @@ function getAllCommandCatalog() {
   return [...commandCatalog, ...adminCommandCatalog];
 }
 
+function findExactAdminCommandMatches(query) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return [];
+
+  return adminCommandCatalog.filter((item) => {
+    const requestText = normalizeText(item.requestText || "");
+    const label = normalizeText(item.label || "");
+    return normalizedQuery === requestText || normalizedQuery === label;
+  });
+}
+
 function getSymbologyTarget(normalizedQuery) {
   const targets = getSymbologyTargets(normalizedQuery);
   return targets[0]?.codeId === "99" ? null : targets[0];
@@ -827,6 +838,7 @@ function buildSingleClauseCommand(clause) {
   const builders = [
     buildReplaceThenRangeCommand,
     buildTrimLeadingZeroesCommand,
+    buildRemoveTrailingCharactersCommand,
     findExactSpaceTransformCommand,
     buildDeleteThenLeadingCommand,
     buildDeleteThenFromPositionToEndCommand,
@@ -933,6 +945,16 @@ function parseStructuredNlpRequest(query) {
       targetChar: replaceChars.targetChar,
     };
   } else {
+    const trailingDeleteCount = findTrailingDeleteCount(normalizedQuery);
+    if (trailingDeleteCount) {
+      structured.operation = {
+        type: "removeTrailing",
+        characterCount: trailingDeleteCount,
+      };
+    }
+  }
+
+  if (!structured.operation) {
     const deleteChars = findDeleteTargetCharacters(query);
     const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
     const deleteFromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
@@ -1141,6 +1163,7 @@ function hasOperationTarget(operation) {
   if (operation.type === "range") return operation.ranges.length > 0;
   if (operation.type === "fromPositionToEnd") return Number.isInteger(operation.startPosition);
   if (operation.type === "leading") return Number.isInteger(operation.characterCount);
+  if (operation.type === "removeTrailing") return Number.isInteger(operation.characterCount);
   if (operation.type === "zeroSuppress") return true;
   return true;
 }
@@ -1179,6 +1202,9 @@ function buildIntentActions(operation) {
   }
   if (operation.type === "leading") {
     return [{ type: "output_leading", characterCount: operation.characterCount }];
+  }
+  if (operation.type === "removeTrailing") {
+    return [{ type: "remove_trailing", characterCount: operation.characterCount }];
   }
   if (operation.type === "zeroSuppress") {
     return [{ type: "zero_suppress" }];
@@ -1223,6 +1249,10 @@ function buildCanonicalQueryFromStructuredNlp(structured) {
 
   if (operation.type === "leading") {
     return `${scopePrefix}先頭${operation.characterCount}桁出力`;
+  }
+
+  if (operation.type === "removeTrailing") {
+    return `${scopePrefix}末尾${operation.characterCount}桁データ削除`;
   }
 
   if (operation.type === "zeroSuppress") {
@@ -1296,10 +1326,12 @@ function buildCommandFromStructuredNlp(question, intentUnderstanding = buildInte
   const structured = intentUnderstanding?.structured;
   if (!structured || intentUnderstanding.confidence < 0.7) return null;
 
-  const query = structured.canonicalQuery || question;
+  const hasPairedConditions = (intentUnderstanding.targetConditions || []).some((condition) => condition.source === "paired");
+  const query = hasPairedConditions ? question : (structured.canonicalQuery || question);
   const builders = [
     buildReplaceThenRangeCommand,
     buildTrimLeadingZeroesCommand,
+    buildRemoveTrailingCharactersCommand,
     buildDeleteThenLeadingCommand,
     findExactSpaceTransformCommand,
     buildDeleteThenFromPositionToEndCommand,
@@ -1488,6 +1520,7 @@ function getOperationLabel(operation) {
     delete: "削除",
     deleteFromPositionToEnd: "削除後の指定桁以降出力",
     deleteLeading: "削除後の先頭桁数出力",
+    removeTrailing: "末尾桁数削除",
     replace: "置換",
     range: "指定範囲出力",
     fromPositionToEnd: "指定桁以降出力",
@@ -1517,7 +1550,32 @@ function getOperationTargetLabel(operation) {
   if (operation.type === "leading") {
     return `先頭${operation.characterCount}桁`;
   }
+  if (operation.type === "removeTrailing") {
+    return `末尾${operation.characterCount}桁`;
+  }
   return "";
+}
+
+function findTrailingDeleteCount(normalizedQuery) {
+  const mentionsDelete = ["削除", "除去", "消す", "消して", "取り除", "カット"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  );
+  if (!mentionsDelete) return 0;
+
+  const patterns = [
+    /(?:末尾|最後)(?:から|の)?\s*(\d{1,2})\s*桁(?:分|の)?\s*(?:データ|文字)?\s*(?:を)?\s*(?:削除|除去|消す|消して|取り除|カット)/,
+    /(?:末尾|最後)(?:の)?\s*(?:データ|文字)?\s*(\d{1,2})\s*桁(?:分)?\s*(?:を)?\s*(?:削除|除去|消す|消して|取り除|カット)/,
+    /(?:データ|文字)?\s*(?:末尾|最後)(?:から|の)?\s*(\d{1,2})\s*桁(?:分)?\s*(?:を)?\s*(?:削除|除去|消す|消して|取り除|カット)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalizedQuery.match(pattern);
+    if (!match) continue;
+    const count = Number(match[1]);
+    if (Number.isInteger(count) && count >= 1 && count <= 99) return count;
+  }
+
+  return 0;
 }
 
 function buildLeadingCharactersCommand(query) {
@@ -1552,6 +1610,35 @@ function buildLeadingCharactersCommand(query) {
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       "複数条件は | で区切り、2件目以降は DFMBK3 を付けずに条件ブロックだけを連結します。",
       `${editorCommand} は先頭から${characterCount}桁を送信する Data Format Editor コマンドです。99桁を超える場合はF2を分割します。`,
+    ],
+  };
+}
+
+function buildRemoveTrailingCharactersCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const characterCount = findTrailingDeleteCount(normalizedQuery);
+  if (!characterCount) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const countHex = String(characterCount).padStart(2, "0");
+  const editorCommand = `E9${countHex}`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-remove-trailing-${characterCount}`,
+    label: `${codeLabel}・${lengthLabel} 末尾${characterCount}桁データ削除`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、読み取りデータの末尾${characterCount}桁を除いて出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand)),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `${editorCommand} は現在位置から末尾までのうち、最後の${characterCount}桁を除いたデータを送信する指定です。`,
     ],
   };
 }
@@ -2990,6 +3077,7 @@ function getExpectedEditorCommandsForAction(action) {
   if (action.type === "output_leading") {
     return splitSendCounts(action.characterCount).map((count) => `F2${String(count).padStart(2, "0")}00`);
   }
+  if (action.type === "remove_trailing") return [`E9${String(action.characterCount).padStart(2, "0")}`];
   if (action.type === "suffix_repeated_character") return [action.command];
   if (action.type === "zero_suppress") return ["E630F100"];
   return [];
@@ -3037,6 +3125,8 @@ function buildGenerationCheckNotes(intentUnderstanding) {
       notes.push(`生成前チェック: 先頭付加のため ${action.command}F100 の順序を確認しました。`);
     } else if (action.type === "suffix_key") {
       notes.push(`生成前チェック: 末尾付加のため F100${action.command} の順序を確認しました。`);
+    } else if (action.type === "remove_trailing") {
+      notes.push(`生成前チェック: 末尾${action.characterCount}桁削除のため E9${String(action.characterCount).padStart(2, "0")} を確認しました。`);
     }
   });
 
@@ -3117,6 +3207,13 @@ function describeEditorCommands(commandHex) {
     if (code === "F1" && index + 4 <= commandHex.length) {
       const insertHex = commandHex.slice(index + 2, index + 4).toUpperCase();
       descriptions.push(`F1${insertHex}: 現在位置から末尾までを出力します${insertHex === "00" ? "" : `。最後に ${insertHex} を追加します`}`);
+      index += 4;
+      continue;
+    }
+
+    if (code === "E9" && index + 4 <= commandHex.length) {
+      const count = Number(commandHex.slice(index + 2, index + 4));
+      descriptions.push(`E9${commandHex.slice(index + 2, index + 4)}: 現在位置から末尾までのうち、最後の${count}桁を除いたデータを出力します。`);
       index += 4;
       continue;
     }
@@ -3635,6 +3732,15 @@ async function answerQuestion(question) {
     return;
   }
 
+  const exactAdminMatches = findExactAdminCommandMatches(question);
+  if (exactAdminMatches.length === 1) {
+    const intentUnderstanding = buildIntentUnderstanding(question);
+    const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
+    const item = validateGeneratedCommand(applyClearSettingsPrefix(exactAdminMatches[0], shouldClearSettings), intentUnderstanding);
+    addBotResponse(originalQuestion, commandToHtml(item), { html: true });
+    return;
+  }
+
   const llmIntent = await loadLlmIntentUnderstanding(question);
   if (llmIntent?.intent === "data_format_setting" && llmIntent.confidence < 0.7 && llmIntent.clarifyingQuestion) {
     setPendingClarification("llm_intent", question, { llmIntent });
@@ -3659,6 +3765,7 @@ async function answerQuestion(question) {
   const structuredNlpCommand = buildCommandFromStructuredNlp(question, intentUnderstanding);
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
+  const removeTrailingCharactersCommand = buildRemoveTrailingCharactersCommand(question);
   const repeatedSuffixControlInsertCommand = buildRepeatedSuffixControlInsertCommand(question);
   const multiPositionControlInsertCommand = buildMultiPositionControlInsertCommand(question);
   const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
@@ -3698,6 +3805,11 @@ async function answerQuestion(question) {
 
   if (trimLeadingZeroesCommand) {
     addBotResponse(originalQuestion, commandHtml(trimLeadingZeroesCommand), { html: true });
+    return;
+  }
+
+  if (removeTrailingCharactersCommand) {
+    addBotResponse(originalQuestion, commandHtml(removeTrailingCharactersCommand), { html: true });
     return;
   }
 
