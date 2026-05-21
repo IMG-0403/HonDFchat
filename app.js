@@ -556,6 +556,7 @@ const settingAppendWords = [...appendWords, "設定"];
 const messages = document.querySelector("#messages");
 const form = document.querySelector("#chatForm");
 const input = document.querySelector("#messageInput");
+const sendButton = document.querySelector(".send-button");
 const clearButton = document.querySelector("#clearButton");
 const quickActions = document.querySelector("#quickActions");
 const categoryList = document.querySelector("#categoryList");
@@ -565,6 +566,7 @@ const scannerMark = document.querySelector(".scanner-mark");
 let adminClickCount = 0;
 let adminClickTimer = 0;
 let pendingClarification = null;
+let isAnswering = false;
 
 function normalizeText(value) {
   return value
@@ -2837,12 +2839,21 @@ const chatLogStorageKey = "honDataFormatChatLogs";
 const chatLogLimit = 1000;
 
 function addMessage(role, content, options = {}) {
-  if (!content) return;
-  if (!messages || !template) return;
+  if (!content) return null;
+  if (!messages || !template) return null;
 
   const node = template.content.firstElementChild.cloneNode(true);
   node.classList.add(role);
   const bubble = node.querySelector(".bubble");
+  const statusText = options.status ? String(options.status) : "";
+
+  if (statusText) {
+    const status = document.createElement("span");
+    status.className = "message-status";
+    status.textContent = statusText;
+    node.classList.add("has-status");
+    node.insertBefore(status, bubble);
+  }
 
   if (options.html) {
     bubble.innerHTML = content;
@@ -2853,11 +2864,38 @@ function addMessage(role, content, options = {}) {
   messages.append(node);
   renderAztecBarcodes(bubble);
   messages.scrollTop = messages.scrollHeight;
+  return node;
 }
 
 function addBotResponse(question, content, options = {}) {
   addMessage("bot", content, options);
   saveChatbotLog(question, content, options);
+}
+
+function setMessageStatus(messageNode, statusText) {
+  if (!messageNode) return;
+  const status = messageNode.querySelector(".message-status");
+  if (!status) return;
+  status.textContent = statusText || "";
+  status.hidden = !statusText;
+  messageNode.classList.toggle("has-status", Boolean(statusText));
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function setAnswerInputLocked(locked) {
+  isAnswering = locked;
+  if (input) input.disabled = locked;
+  if (sendButton) sendButton.disabled = locked;
+  if (form) form.setAttribute("aria-busy", locked ? "true" : "false");
+  if (messages) messages.setAttribute("aria-busy", locked ? "true" : "false");
+
+  samplePrompts.forEach((button) => {
+    button.disabled = locked;
+  });
+
+  document.querySelectorAll(".quick-action").forEach((button) => {
+    button.disabled = locked;
+  });
 }
 
 function saveChatbotLog(question, answerContent, options = {}) {
@@ -3933,21 +3971,35 @@ async function answerQuestion(question) {
 }
 
 function submitQuestion(question) {
+  if (isAnswering) return;
   const trimmed = question.trim();
   if (!trimmed) return;
   const resolvedQuestion = resolvePendingClarification(trimmed);
 
-  addMessage("user", trimmed);
+  setAnswerInputLocked(true);
+  const userMessage = addMessage("user", trimmed, { status: "確認中..." });
   if (input) input.value = "";
   window.setTimeout(() => {
-    answerQuestion(resolvedQuestion).catch(() => addBotResponse(trimmed, barcodeUnavailableHtml, { html: true }));
+    answerQuestion(resolvedQuestion)
+      .catch(() => addBotResponse(trimmed, barcodeUnavailableHtml, { html: true }))
+      .finally(() => {
+        setMessageStatus(userMessage, "");
+        setAnswerInputLocked(false);
+        input?.focus();
+      });
   }, 180);
 }
 
 function submitCommandItem(item) {
+  if (isAnswering) return;
+  setAnswerInputLocked(true);
   addMessage("user", item.label);
   if (input) input.value = "";
-  window.setTimeout(() => addMessage("bot", commandToHtml(item), { html: true }), 180);
+  window.setTimeout(() => {
+    addMessage("bot", commandToHtml(item), { html: true });
+    setAnswerInputLocked(false);
+    input?.focus();
+  }, 180);
 }
 
 function openPdf(path) {
