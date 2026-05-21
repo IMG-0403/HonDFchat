@@ -2515,6 +2515,7 @@ function buildPrefixTextCommand(query) {
 
 function findSuffixText(query) {
   const asciiQuery = normalizeAsciiText(query);
+  if (/(?:キー入力|キー|key|ctrl|control|コントロール|alt|shift)/i.test(asciiQuery)) return "";
   const tokenPattern = "[A-Za-z0-9][A-Za-z0-9+ ]{0,40}";
   const patterns = [
     new RegExp(`(?:末尾|データ末尾|サフィックス|suffix)\\s*(?:設定)?\\s*(?:に|へ|で)?\\s*(?:文字列)?\\s*(${tokenPattern})\\s*(?:の)?\\s*(?:文字列入力|文字列)?\\s*(?:を)?\\s*(?:付加|追加|つける|付ける|挿入|設定|の場合)?`, "i"),
@@ -4018,7 +4019,7 @@ async function answerQuestion(question) {
     question = llmIntent.canonicalQuery;
   }
 
-  const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
+  const shouldClearSettings = shouldClearSettingsBeforeCommand(originalQuestion) || shouldClearSettingsBeforeCommand(question);
   const intentUnderstanding = buildIntentUnderstanding(question);
   const commandHtml = (item) => commandToHtml(validateGeneratedCommand(applyClearSettingsPrefix(item, shouldClearSettings), intentUnderstanding));
   const functionKeyTextAmbiguityHtml = buildFunctionKeyTextAmbiguityHtml(question);
