@@ -1451,6 +1451,11 @@ function resolvePendingClarification(answer) {
     return `${pending.question}、${answer}`;
   }
 
+  if (pending.type === "llm_intent") {
+    clearPendingClarification();
+    return `${pending.question}、${answer}`;
+  }
+
   clearPendingClarification();
   return answer;
 }
@@ -3445,6 +3450,85 @@ function getSupabaseConfig() {
   };
 }
 
+function getIntentApiUrl() {
+  if (window.HON_INTENT_API_URL) return window.HON_INTENT_API_URL;
+  const { url } = getSupabaseConfig();
+  return url ? `${url}/functions/v1/understand-intent` : "";
+}
+
+function getRecentConversationHistory() {
+  try {
+    const logs = JSON.parse(localStorage.getItem(chatLogStorageKey) || "[]");
+    if (!Array.isArray(logs)) return [];
+    return logs.slice(-6).map((log) => ({
+      question: String(log.question || "").slice(0, 300),
+      answer: String(log.answer || "").slice(0, 500),
+    }));
+  } catch (_error) {
+    return [];
+  }
+}
+
+function getRelatedCatalogHints(question) {
+  return findMatches(question).slice(0, 8).map((item) => ({
+    label: item.label,
+    summary: item.summary,
+    requestText: item.requestText || "",
+    keywords: item.keywords || [],
+  }));
+}
+
+function getKnownSymbologyHints() {
+  return symbologyCodeTable.map((item) => ({
+    label: item.label,
+    codeId: item.codeId,
+    aliases: item.aliases || [],
+  }));
+}
+
+function normalizeLlmIntentResult(value) {
+  if (!value || typeof value !== "object") return null;
+  const confidence = Number(value.confidence);
+  return {
+    intent: String(value.intent || "unknown"),
+    confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0,
+    canonicalQuery: String(value.canonicalQuery || "").trim(),
+    targetSymbologies: Array.isArray(value.targetSymbologies) ? value.targetSymbologies : [],
+    readLengths: Array.isArray(value.readLengths) ? value.readLengths : [],
+    actions: Array.isArray(value.actions) ? value.actions : [],
+    missingSlots: Array.isArray(value.missingSlots) ? value.missingSlots : [],
+    clarifyingQuestion: value.clarifyingQuestion ? String(value.clarifyingQuestion).trim() : "",
+    reason: String(value.reason || ""),
+  };
+}
+
+async function loadLlmIntentUnderstanding(question) {
+  const apiUrl = getIntentApiUrl();
+  const { anonKey } = getSupabaseConfig();
+  if (!apiUrl) return null;
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        ...(anonKey ? { apikey: anonKey, Authorization: `Bearer ${anonKey}` } : {}),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        question,
+        conversationHistory: getRecentConversationHistory(),
+        relatedCatalogHints: getRelatedCatalogHints(question),
+        knownSymbologies: getKnownSymbologyHints(),
+      }),
+    });
+
+    if (!response.ok) return null;
+    return normalizeLlmIntentResult(await response.json());
+  } catch (_error) {
+    return null;
+  }
+}
+
 async function loadAdminCommandCatalog() {
   const { url, anonKey } = getSupabaseConfig();
   if (!url || !anonKey) return;
@@ -3537,16 +3621,34 @@ function renderAztecBarcodes(root = document) {
   });
 }
 
-function answerQuestion(question) {
+async function answerQuestion(question) {
+  const originalQuestion = question;
+
   if (isEmptyDataFormatCommand(question)) {
-    addBotResponse(question, "現在はデータフォーマット設定されていません。");
+    addBotResponse(originalQuestion, "現在はデータフォーマット設定されていません。");
     return;
   }
 
   if (isDataFormatCommandText(question)) {
     const explanationHtml = explainDataFormatCommandToHtml(question);
-    addBotResponse(question, explanationHtml || barcodeUnavailableHtml, { html: true });
+    addBotResponse(originalQuestion, explanationHtml || barcodeUnavailableHtml, { html: true });
     return;
+  }
+
+  const llmIntent = await loadLlmIntentUnderstanding(question);
+  if (llmIntent?.intent === "data_format_setting" && llmIntent.confidence < 0.7 && llmIntent.clarifyingQuestion) {
+    setPendingClarification("llm_intent", question, { llmIntent });
+    addBotResponse(originalQuestion, `
+      <div class="command-card">
+        <strong>確認が必要です</strong>
+        <p>${escapeHtml(llmIntent.clarifyingQuestion)}</p>
+      </div>
+    `, { html: true });
+    return;
+  }
+
+  if (llmIntent?.intent === "data_format_setting" && llmIntent.confidence >= 0.7 && llmIntent.canonicalQuery) {
+    question = llmIntent.canonicalQuery;
   }
 
   const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
@@ -3580,142 +3682,142 @@ function answerQuestion(question) {
 
   if (functionKeyTextAmbiguityHtml) {
     setPendingClarification("function_key_text", question, { key: getAmbiguousFunctionKeyAppend(question) });
-    addBotResponse(question, functionKeyTextAmbiguityHtml, { html: true });
+    addBotResponse(originalQuestion, functionKeyTextAmbiguityHtml, { html: true });
     return;
   }
 
   if (multiClauseCommand) {
-    addBotResponse(question, commandHtml(multiClauseCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(multiClauseCommand), { html: true });
     return;
   }
 
   if (replaceThenRangeCommand) {
-    addBotResponse(question, commandHtml(replaceThenRangeCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(replaceThenRangeCommand), { html: true });
     return;
   }
 
   if (trimLeadingZeroesCommand) {
-    addBotResponse(question, commandHtml(trimLeadingZeroesCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(trimLeadingZeroesCommand), { html: true });
     return;
   }
 
   if (repeatedSuffixControlInsertCommand) {
-    addBotResponse(question, commandHtml(repeatedSuffixControlInsertCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(repeatedSuffixControlInsertCommand), { html: true });
     return;
   }
 
   if (multiPositionControlInsertCommand) {
-    addBotResponse(question, commandHtml(multiPositionControlInsertCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(multiPositionControlInsertCommand), { html: true });
     return;
   }
 
   if (insertTextAtPositionCommand) {
-    addBotResponse(question, commandHtml(insertTextAtPositionCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(insertTextAtPositionCommand), { html: true });
     return;
   }
 
   if (prefixB5Command) {
-    addBotResponse(question, commandHtml(prefixB5Command), { html: true });
+    addBotResponse(originalQuestion, commandHtml(prefixB5Command), { html: true });
     return;
   }
 
   if (prefixTextCommand) {
-    addBotResponse(question, commandHtml(prefixTextCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(prefixTextCommand), { html: true });
     return;
   }
 
   if (deleteThenRangeCommand) {
-    addBotResponse(question, commandHtml(deleteThenRangeCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(deleteThenRangeCommand), { html: true });
     return;
   }
 
   if (deleteThenLeadingCommand) {
-    addBotResponse(question, commandToHtml(applyClearSettingsPrefix(deleteThenLeadingCommand, shouldClearSettings)), { html: true });
+    addBotResponse(originalQuestion, commandToHtml(applyClearSettingsPrefix(deleteThenLeadingCommand, shouldClearSettings)), { html: true });
     return;
   }
 
   if (deleteThenFromPositionToEndCommand) {
-    addBotResponse(question, commandHtml(deleteThenFromPositionToEndCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(deleteThenFromPositionToEndCommand), { html: true });
     return;
   }
 
   if (structuredNlpCommand) {
-    addBotResponse(question, commandHtml(structuredNlpCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(structuredNlpCommand), { html: true });
     return;
   }
 
   if (symbologyDelayKeyCommand) {
-    addBotResponse(question, commandHtml(symbologyDelayKeyCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(symbologyDelayKeyCommand), { html: true });
     return;
   }
 
   if (suffixB5Command) {
-    addBotResponse(question, commandHtml(suffixB5Command), { html: true });
+    addBotResponse(originalQuestion, commandHtml(suffixB5Command), { html: true });
     return;
   }
 
   if (exactTransformCommand) {
-    addBotResponse(question, commandHtml(exactTransformCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(exactTransformCommand), { html: true });
     return;
   }
 
   if (exactDeleteCommand) {
-    addBotResponse(question, commandHtml(exactDeleteCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(exactDeleteCommand), { html: true });
     return;
   }
 
   if (untilCharacterCommand) {
-    addBotResponse(question, commandHtml(untilCharacterCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(untilCharacterCommand), { html: true });
     return;
   }
 
   if (generatedRangeCommand) {
-    addBotResponse(question, commandHtml(generatedRangeCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(generatedRangeCommand), { html: true });
     return;
   }
 
   if (fromPositionToEndCommand) {
-    addBotResponse(question, commandHtml(fromPositionToEndCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(fromPositionToEndCommand), { html: true });
     return;
   }
 
   if (generatedLeadingCommand) {
-    addBotResponse(question, commandHtml(generatedLeadingCommand), { html: true });
+    addBotResponse(originalQuestion, commandHtml(generatedLeadingCommand), { html: true });
     return;
   }
 
   if (efDelayMatches.length > 0) {
-    addBotResponse(question, efDelaysToHtml(efDelayMatches), { html: true });
+    addBotResponse(originalQuestion, efDelaysToHtml(efDelayMatches), { html: true });
     return;
   }
 
   if (b5ModifierMatches.length > 0) {
-    addBotResponse(question, b5ModifiersToHtml(b5ModifierMatches), { html: true });
+    addBotResponse(originalQuestion, b5ModifiersToHtml(b5ModifierMatches), { html: true });
     return;
   }
 
   if (b5KeyMatches.length > 0) {
-    addBotResponse(question, b5KeysToHtml(b5KeyMatches), { html: true });
+    addBotResponse(originalQuestion, b5KeysToHtml(b5KeyMatches), { html: true });
     return;
   }
 
   if (matches.length === 0) {
     if (shouldAskClarification(intentUnderstanding)) {
       setPendingClarification("general", question, { intentUnderstanding });
-      addBotResponse(question, buildClarificationHtml(intentUnderstanding), { html: true });
+      addBotResponse(originalQuestion, buildClarificationHtml(intentUnderstanding), { html: true });
       return;
     }
 
-    addBotResponse(question, barcodeUnavailableHtml, { html: true });
+    addBotResponse(originalQuestion, barcodeUnavailableHtml, { html: true });
     return;
   }
 
   if (matches.length > 1) {
-    addBotResponse(question, barcodeUnavailableHtml, { html: true });
+    addBotResponse(originalQuestion, barcodeUnavailableHtml, { html: true });
     return;
   }
 
-  addBotResponse(question, matches.map(commandHtml).join(""), { html: true });
+  addBotResponse(originalQuestion, matches.map(commandHtml).join(""), { html: true });
 }
 
 function submitQuestion(question) {
@@ -3725,7 +3827,9 @@ function submitQuestion(question) {
 
   addMessage("user", trimmed);
   if (input) input.value = "";
-  window.setTimeout(() => answerQuestion(resolvedQuestion), 180);
+  window.setTimeout(() => {
+    answerQuestion(resolvedQuestion).catch(() => addBotResponse(trimmed, barcodeUnavailableHtml, { html: true }));
+  }, 180);
 }
 
 function submitCommandItem(item) {

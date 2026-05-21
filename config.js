@@ -1,3 +1,4 @@
 window.HON_BARCODE_API_URL = "https://obmyqllcqcnohqvkbjuy.supabase.co/functions/v1/barcode";
+window.HON_INTENT_API_URL = "https://obmyqllcqcnohqvkbjuy.supabase.co/functions/v1/understand-intent";
 window.HON_SUPABASE_URL = "https://obmyqllcqcnohqvkbjuy.supabase.co";
 window.HON_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ibXlxbGxjcWNub2hxdmtianV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NTY0ODQsImV4cCI6MjA5NDIzMjQ4NH0.V_zAvtnzrSru8jYBuI-BIKO_OmFYTAkNbshx8al3rTg";

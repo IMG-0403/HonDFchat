@@ -25,15 +25,20 @@ HonDataFormat.pdf
 supabase login
 supabase link --project-ref YOUR_PROJECT_REF
 supabase functions deploy barcode --no-verify-jwt
+supabase functions deploy understand-intent --no-verify-jwt
+supabase secrets set OPENAI_API_KEY=YOUR_OPENAI_API_KEY
 ```
 
 デプロイ後、`config.js` のURLを自分のSupabaseプロジェクトに変更してください。
 
 ```js
 window.HON_BARCODE_API_URL = "https://YOUR_PROJECT_REF.supabase.co/functions/v1/barcode";
+window.HON_INTENT_API_URL = "https://YOUR_PROJECT_REF.supabase.co/functions/v1/understand-intent";
 window.HON_SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co";
 window.HON_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 ```
+
+`understand-intent` はLLMで自然言語をIntent理解JSONに変換するためのFunctionです。LLMには設定コマンドを自由生成させず、足りない項目の聞き返し、または既存ロジックへ渡す標準化依頼文だけを返します。`OPENAI_INTENT_MODEL` をSupabase Secretに設定すると利用モデルを変更できます。
 
 ローカルPCだけで使う場合は、従来どおり `barcode-server.ps1` を起動して `config.js` のURLを `http://127.0.0.1:8765/barcode` に変更してください。
 
