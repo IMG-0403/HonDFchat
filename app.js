@@ -481,7 +481,7 @@ const symbologyCodeTable = [
   { codeId: "78", label: "MaxiCode", aliases: ["maxicode", "maxi code"] },
   { codeId: "72", label: "PDF417", aliases: ["pdf417", "pdf 417"] },
   { codeId: "52", label: "Micro PDF417", aliases: ["micro pdf417", "micro pdf 417"] },
-  { codeId: "73", label: "QRコード", aliases: ["qr", "qrコード", "qr code", "micro qr", "micro qr code"] },
+  { codeId: "73", label: "QRコード", aliases: ["qr", "qrコード", "qr code", "microqr", "micro qr", "micro qr code"] },
   { codeId: "4F", label: "OCR", aliases: ["ocr"] },
   { codeId: "41", label: "Australian Post", aliases: ["australian post"] },
   { codeId: "42", label: "British Post", aliases: ["british post"] },
@@ -709,7 +709,7 @@ function getReadLengths(normalizedQuery) {
     .sort((a, b) => b.length - a.length);
 
   for (const symbologyName of symbologyNames) {
-    const inlineLengthPattern = new RegExp(`${escapeRegExp(symbologyName)}\\s*(?:の|で|を|:|：)?\\s*(\\d{1,4})\\s*桁\\s*(?:読み取り|読取|バーコード|コード)?`, "g");
+    const inlineLengthPattern = new RegExp(`${escapeRegExp(symbologyName)}\\s*(?:の|で|を|:|：)?\\s*(\\d{1,4})\\s*桁(?!目)\\s*(?:読み取り|読取|バーコード|コード)?`, "g");
     while ((match = inlineLengthPattern.exec(normalizedQuery)) !== null) {
       lengths.push(Number(match[1]));
     }
@@ -740,9 +740,14 @@ function getSymbologyLengthPairs(normalizedQuery) {
   const pairs = [];
 
   names.forEach((entry) => {
-    const pattern = new RegExp(`${escapeRegExp(entry.name)}\\s*(?:の|で|を|:|：)?\\s*(\\d{1,4})\\s*桁`, "g");
+    const pattern = new RegExp(`${escapeRegExp(entry.name)}\\s*(?:の|で|を|:|：)?\\s*(\\d{1,4})\\s*桁(?!目)`, "g");
     let match;
     while ((match = pattern.exec(normalizedQuery)) !== null) {
+      if (/^[a-z0-9][a-z0-9 -]*$/i.test(entry.name)) {
+        const before = normalizedQuery[match.index - 1] || "";
+        const after = normalizedQuery[match.index + entry.name.length] || "";
+        if (/[a-z0-9]/i.test(before) || /[a-z0-9]/i.test(after)) continue;
+      }
       const length = Number(match[1]);
       if (!Number.isInteger(length) || length < 0 || length > 9999) continue;
       pairs.push({
@@ -846,10 +851,12 @@ function buildSingleClauseCommand(clause) {
     buildDeleteThenFromPositionToEndCommand,
     findExactDeleteCharacterCommand,
     buildUntilCharacterCommand,
+    buildPrefixValueFilterCommand,
     buildRangeCharactersCommand,
     buildFromPositionToEndCommand,
     buildLeadingCharactersCommand,
     buildRepeatedSuffixControlInsertCommand,
+    buildSegmentedSendInsertCommand,
     buildMultiPositionControlInsertCommand,
     buildInsertTextAtPositionCommand,
     buildPrefixTextCommand,
@@ -1617,6 +1624,56 @@ function buildLeadingCharactersCommand(query) {
   };
 }
 
+function findPrefixValueFilter(query) {
+  const normalizedQuery = normalizeText(query);
+  const mentionsPrefix = /(先頭文字|先頭値|先頭コード|先頭|prefix)/i.test(normalizedQuery);
+  const mentionsOnly = /(のみ|だけ|限定|一致|場合)/.test(normalizedQuery);
+  const mentionsOutput = /(読取出力|読み取り出力|出力|送信|表示)/.test(normalizedQuery);
+  if (!mentionsPrefix || !mentionsOnly || !mentionsOutput) return null;
+
+  const asciiQuery = normalizeAsciiText(query);
+  const match = asciiQuery.match(/(?:先頭文字|先頭値|先頭コード|先頭)\s*([0-9]{2,4}(?:\s*(?:、|,|，|\/|\+|&|and|と)\s*[0-9]{2,4})+)/i);
+  if (!match) return null;
+
+  const values = [...new Set((match[1].match(/[0-9]{2,4}/g) || []))];
+  if (values.length === 0 || values.some((value) => value.length < 2 || value.length > 4)) return null;
+  return values;
+}
+
+function buildPrefixValueFilterCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const prefixValues = findPrefixValueFilter(query);
+  if (!prefixValues) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const target = symbologyTargets.length === 1 ? symbologyTargets[0] : getSymbologyTargetLegacy(normalizedQuery);
+  if (!target || target.codeId === "99") return null;
+
+  const readLengths = getReadLengths(normalizedQuery);
+  const lengthField = readLengths.length === 1 ? String(readLengths[0]).padStart(4, "0") : "9999";
+  const blocks = prefixValues.map((value) => {
+    const compareCommand = [...value].map((char) => `FE${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`).join("");
+    return `0099${target.codeId}${lengthField}${compareCommand}F7F100`;
+  });
+  const command = `${buildDataFormatCommandFromBlocks(blocks).replace(/\.$/, "")};DFM_EN2;DFMDEC1.`;
+
+  return {
+    id: `df-generated-prefix-filter-${target.codeId}-${lengthField}-${prefixValues.join("-")}`,
+    label: `${target.label}・先頭${prefixValues.join("、")}のみ読取出力`,
+    category: "登録例",
+    summary: `${target.label}を対象に、先頭文字列が${prefixValues.join("、")}に一致するデータだけを出力します。`,
+    keywords: [],
+    command,
+    skipGenerationValidation: true,
+    notes: [
+      `${target.codeId} は${target.label}、${lengthField} は${readLengths.length === 1 ? `${readLengths[0]}桁` : "全桁数"}を表す指定です。`,
+      "FE は現在位置の文字を比較し、一致した場合だけカーソルを進める指定です。",
+      "F7F100 は比較後にカーソルを先頭へ戻し、読み取りデータ全体を出力します。",
+      "DFM_EN2 は一致必須、DFMDEC1 は不一致時のエラー音OFFです。",
+    ],
+  };
+}
+
 function buildRemoveTrailingCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
   const characterCount = findTrailingDeleteCount(normalizedQuery);
@@ -1948,6 +2005,7 @@ function normalizeReplaceCharacter(value) {
   if (["ピリオド", "ドット", "period", "dot"].includes(lowered)) return ".";
   if (["ハイフン", "hyphen", "マイナス", "minus"].includes(lowered)) return "-";
   if (["カンマ", "comma"].includes(lowered)) return ",";
+  if (["cr", "enter", "エンター", "改行"].includes(lowered)) return "\x0D";
   if (["gs", "gsコード", "gsキャラクタ", "gsキャラクター", "group separator", "グループセパレータ"].includes(lowered)) return "\x1D";
   if (normalized.length === 1 && normalized >= "!" && normalized <= "~") return normalized;
   return null;
@@ -1959,6 +2017,7 @@ function describeReplaceCharacter(char) {
   if (char === ".") return ".(ピリオド)";
   if (char === "-") return "-(ハイフン)";
   if (char === ",") return ",(カンマ)";
+  if (char === "\x0D") return "CR";
   if (char === "\x1D") return "GSキャラクタ";
   return char;
 }
@@ -2272,6 +2331,64 @@ function buildRepeatedSuffixControlInsertCommand(query) {
   };
 }
 
+function findSegmentedSendInsertSequence(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  const mentionsRemainder = /(残り|残余|以降|末尾まで|最後まで)\s*(?:を)?\s*(?:送信|出力|表示)/.test(asciiQuery);
+  if (!mentionsRemainder) return [];
+
+  const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const segments = asciiQuery.split(/\s*(?:、|,|，|\n)\s*/).map((segment) => segment.trim()).filter(Boolean);
+  const steps = [];
+
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const countMatch = segments[index].match(/(\d{1,2})\s*桁\s*(?:を)?\s*(?:送信|出力|表示)/);
+    if (!countMatch) continue;
+
+    const insertPattern = new RegExp(`^\\s*(${tokenPattern})\\s*(?:を)?\\s*(?:挿入|付加|追加|つける|付ける)`, "i");
+    const insertMatch = segments[index + 1].match(insertPattern);
+    if (!insertMatch) continue;
+
+    const insertion = normalizeInsertControlToken(insertMatch[1]);
+    const count = Number(countMatch[1]);
+    if (!insertion || !Number.isInteger(count) || count < 1 || count > 99) return [];
+    steps.push({ count, ...insertion });
+    index += 1;
+  }
+
+  return steps;
+}
+
+function buildSegmentedSendInsertCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const steps = findSegmentedSendInsertSequence(query);
+  const mentionsOutput = /(出力|送信|表示|読み取り|読取|設定)/.test(normalizedQuery);
+  if (steps.length === 0 || !mentionsOutput) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const editorCommand = `${steps.map((step) => `F2${String(step.count).padStart(2, "0")}${step.hex}`).join("")}F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+  const stepLabel = steps.map((step) => `${step.count}桁送信後に${step.label}`).join("、");
+
+  return {
+    id: `df-generated-segmented-send-insert-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${editorCommand}`,
+    label: `${codeLabel}・${lengthLabel} ${stepLabel}を挿入して残り送信`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、${stepLabel}を挿入し、最後に残りのデータを送信します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      ...steps.map((step) => `F2${String(step.count).padStart(2, "0")}${step.hex} は現在位置から${step.count}桁を送信し、${step.label}を追加する指定です。`),
+      "F100 は最後に残りの読み取りデータを全て送信する指定です。",
+    ],
+  };
+}
+
 function buildMultiPositionControlInsertCommand(query) {
   const normalizedQuery = normalizeText(query);
   const insertions = findMultiPositionControlInsertions(query);
@@ -2509,7 +2626,10 @@ function findB5KeyForAppend(query) {
   const namedKey = b5KeyMapTable.find((item) => {
     const key = normalizeText(item.key);
     const aliases = (item.aliases || []).map(normalizeText);
-    return normalizedQuery.includes(key) || aliases.some((alias) => normalizedQuery.includes(alias));
+    const rawKeyMatches = key.length === 1
+      ? new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(key)}(?:キー|key)(?=$|[^a-z0-9])`, "i").test(normalizedQuery)
+      : normalizedQuery.includes(key);
+    return rawKeyMatches || aliases.some((alias) => alias.length > 1 && normalizedQuery.includes(alias));
   });
   if (namedKey) return namedKey;
 
@@ -3888,7 +4008,9 @@ async function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
   const removeTrailingCharactersCommand = buildRemoveTrailingCharactersCommand(question);
+  const prefixValueFilterCommand = buildPrefixValueFilterCommand(question);
   const repeatedSuffixControlInsertCommand = buildRepeatedSuffixControlInsertCommand(question);
+  const segmentedSendInsertCommand = buildSegmentedSendInsertCommand(question);
   const multiPositionControlInsertCommand = buildMultiPositionControlInsertCommand(question);
   const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
   const prefixB5Command = buildPrefixB5Command(question);
@@ -3936,8 +4058,18 @@ async function answerQuestion(question) {
     return;
   }
 
+  if (prefixValueFilterCommand) {
+    addBotResponse(originalQuestion, commandHtml(prefixValueFilterCommand), { html: true });
+    return;
+  }
+
   if (repeatedSuffixControlInsertCommand) {
     addBotResponse(originalQuestion, commandHtml(repeatedSuffixControlInsertCommand), { html: true });
+    return;
+  }
+
+  if (segmentedSendInsertCommand) {
+    addBotResponse(originalQuestion, commandHtml(segmentedSendInsertCommand), { html: true });
     return;
   }
 
