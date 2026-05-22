@@ -864,6 +864,26 @@ function splitIntoSymbologyClauses(query) {
     .filter(Boolean);
 }
 
+function splitIntoLengthConditionClauses(query) {
+  const normalizedQuery = normalizeText(query);
+  const starts = [];
+  const pattern = /(?<!\d)\d{1,4}\s*桁\s*(?:読み取り|読取)/g;
+  let match;
+
+  while ((match = pattern.exec(normalizedQuery)) !== null) {
+    starts.push({ index: match.index });
+  }
+
+  if (starts.length < 2) return [];
+
+  return starts
+    .map((start, index) => {
+      const end = starts[index + 1]?.index ?? query.length;
+      return query.slice(start.index, end).replace(/^[、,\s]+|[、,\s]+$/g, "").trim();
+    })
+    .filter(Boolean);
+}
+
 function extractDataFormatBlocks(command) {
   const normalizedCommand = normalizeSettingCommand(command);
   const commandBody = normalizedCommand.startsWith("DFMBK3")
@@ -886,8 +906,8 @@ function buildSingleClauseCommand(clause) {
     buildRangeCharactersCommand,
     buildFromPositionToEndCommand,
     buildLeadingCharactersCommand,
-    buildRepeatedSuffixControlInsertCommand,
     buildSegmentedSendInsertCommand,
+    buildRepeatedSuffixControlInsertCommand,
     buildMultiPositionControlInsertCommand,
     buildInsertTextAtPositionCommand,
     buildPrefixTextCommand,
@@ -907,9 +927,11 @@ function buildSingleClauseCommand(clause) {
 
 function buildMultiClauseCommand(query) {
   const clauses = splitIntoSymbologyClauses(query);
-  if (clauses.length < 2) return null;
+  const lengthClauses = clauses.length >= 2 ? [] : splitIntoLengthConditionClauses(query);
+  const effectiveClauses = clauses.length >= 2 ? clauses : lengthClauses;
+  if (effectiveClauses.length < 2) return null;
 
-  const items = clauses.map(buildSingleClauseCommand);
+  const items = effectiveClauses.map(buildSingleClauseCommand);
   if (items.some((item) => !item)) return null;
 
   const blocks = items.flatMap((item) => extractDataFormatBlocks(item.command));
@@ -919,7 +941,7 @@ function buildMultiClauseCommand(query) {
     id: `df-generated-multi-clause-${blocks.length}`,
     label: "複数条件のデータフォーマット",
     category: "登録例",
-    summary: clauses.join(" / "),
+    summary: effectiveClauses.join(" / "),
     keywords: [],
     command: buildDataFormatCommandFromBlocks(blocks),
     skipGenerationValidation: true,
@@ -1150,7 +1172,7 @@ function buildCommonCommandIntent(question, structured = null) {
 function buildSegmentedSendInsertIntentAction(query) {
   const steps = findSegmentedSendInsertSequence(query);
   if (steps.length === 0) return null;
-  const editorCommand = `${steps.map((step) => `F2${String(step.count).padStart(2, "0")}${step.hex}`).join("")}F100`;
+  const editorCommand = buildSegmentedSendInsertEditorCommand(steps);
   return {
     type: "segmented_send_insert",
     editorCommand,
@@ -2530,30 +2552,44 @@ function findSegmentedSendInsertSequence(query) {
     const countMatch = segments[index].match(/(\d{1,2})\s*桁\s*(?:を)?\s*(?:送信|出力|表示)/);
     if (!countMatch) continue;
 
-    const insertPattern = new RegExp(`^\\s*(${tokenPattern})\\s*(?:を)?\\s*(?:挿入|付加|追加|つける|付ける)`, "i");
+    const insertPattern = new RegExp(`^\\s*(${tokenPattern})\\s*(?:(\\d{1,2})\\s*(?:回|個))?\\s*(?:を)?\\s*(?:挿入|付加|追加|つける|付ける)`, "i");
     const insertMatch = segments[index + 1].match(insertPattern);
     if (!insertMatch) continue;
 
     const insertion = normalizeInsertControlToken(insertMatch[1]);
     const count = Number(countMatch[1]);
+    const insertCount = insertMatch[2] ? Number(insertMatch[2]) : 1;
     if (!insertion || !Number.isInteger(count) || count < 1 || count > 99) return [];
-    steps.push({ count, ...insertion });
+    if (!Number.isInteger(insertCount) || insertCount < 1 || insertCount > 99) return [];
+    steps.push({ count, insertCount, ...insertion });
     index += 1;
   }
 
   if (steps.length === 0 && /[+＋]/.test(asciiQuery)) {
-    const plusPattern = new RegExp(`(\\d{1,2})\\s*桁\\s*(?:を)?\\s*(?:送信|出力|表示)?\\s*[+＋]\\s*(${tokenPattern})(?=\\s*(?:[+＋]|設定|送信|出力|表示|$))`, "gi");
+    const plusPattern = new RegExp(`(\\d{1,2})\\s*桁\\s*(?:を)?\\s*(?:送信|出力|表示)?\\s*[+＋]\\s*(${tokenPattern})\\s*(?:(\\d{1,2})\\s*(?:回|個))?(?=\\s*(?:[+＋]|設定|送信|出力|表示|$))`, "gi");
     let match;
     while ((match = plusPattern.exec(asciiQuery)) !== null) {
       const insertion = normalizeInsertControlToken(match[2]);
       const count = Number(match[1]);
+      const insertCount = match[3] ? Number(match[3]) : 1;
       if (!insertion || !Number.isInteger(count) || count < 1 || count > 99) return [];
-      steps.push({ count, ...insertion });
+      if (!Number.isInteger(insertCount) || insertCount < 1 || insertCount > 99) return [];
+      steps.push({ count, insertCount, ...insertion });
     }
   }
 
   if (!mentionsRemainder && steps.length < 2) return [];
   return steps;
+}
+
+function buildSegmentedSendInsertEditorCommand(steps) {
+  const parts = steps.map((step) => {
+    const sendCount = String(step.count).padStart(2, "0");
+    const insertCount = step.insertCount || 1;
+    if (insertCount > 1) return `F2${sendCount}00F4${step.hex}${String(insertCount).padStart(2, "0")}`;
+    return `F2${sendCount}${step.hex}`;
+  });
+  return `${parts.join("")}F100`;
 }
 
 function buildSegmentedSendInsertCommand(query) {
@@ -2564,13 +2600,13 @@ function buildSegmentedSendInsertCommand(query) {
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengths = getReadLengths(normalizedQuery);
-  const editorCommand = `${steps.map((step) => `F2${String(step.count).padStart(2, "0")}${step.hex}`).join("")}F100`;
+  const editorCommand = buildSegmentedSendInsertEditorCommand(steps);
   const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
   const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
   const lengthNote = readLengths.length > 0
     ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
     : "9999 は全桁数を表す指定です。";
-  const stepLabel = steps.map((step) => `${step.count}桁送信後に${step.label}`).join("、");
+  const stepLabel = steps.map((step) => `${step.count}桁送信後に${step.label}${step.insertCount > 1 ? `${step.insertCount}個` : ""}`).join("、");
 
   return {
     id: `df-generated-segmented-send-insert-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${editorCommand}`,
@@ -2581,7 +2617,12 @@ function buildSegmentedSendInsertCommand(query) {
     command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
-      ...steps.map((step) => `F2${String(step.count).padStart(2, "0")}${step.hex} は現在位置から${step.count}桁を送信し、${step.label}を追加する指定です。`),
+      ...steps.map((step) => {
+        if (step.insertCount > 1) {
+          return `F2${String(step.count).padStart(2, "0")}00 は現在位置から${step.count}桁を送信し、F4${step.hex}${String(step.insertCount).padStart(2, "0")} で${step.label}を${step.insertCount}個追加する指定です。`;
+        }
+        return `F2${String(step.count).padStart(2, "0")}${step.hex} は現在位置から${step.count}桁を送信し、${step.label}を追加する指定です。`;
+      }),
       "F100 は続きの読み取りデータを全て送信する指定です。",
     ],
   };
@@ -4220,8 +4261,8 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
     buildTrimLeadingZeroesCommand,
     buildRemoveTrailingCharactersCommand,
     buildPrefixValueFilterCommand,
-    buildRepeatedSuffixControlInsertCommand,
     buildSegmentedSendInsertCommand,
+    buildRepeatedSuffixControlInsertCommand,
     buildMultiPositionControlInsertCommand,
     buildInsertTextAtPositionCommand,
     buildPrefixB5Command,
@@ -4377,13 +4418,13 @@ async function answerQuestion(question) {
     return;
   }
 
-  if (repeatedSuffixControlInsertCommand) {
-    addBotResponse(originalQuestion, await commandHtml(repeatedSuffixControlInsertCommand), { html: true });
+  if (segmentedSendInsertCommand) {
+    addBotResponse(originalQuestion, await commandHtml(segmentedSendInsertCommand), { html: true });
     return;
   }
 
-  if (segmentedSendInsertCommand) {
-    addBotResponse(originalQuestion, await commandHtml(segmentedSendInsertCommand), { html: true });
+  if (repeatedSuffixControlInsertCommand) {
+    addBotResponse(originalQuestion, await commandHtml(repeatedSuffixControlInsertCommand), { html: true });
     return;
   }
 
