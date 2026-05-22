@@ -1161,15 +1161,130 @@ function buildSegmentedSendInsertIntentAction(query) {
 function shouldUseLlmCanonicalQuery(originalQuestion, canonicalQuery) {
   const originalConditions = buildTargetConditions(normalizeText(originalQuestion));
   const canonicalConditions = buildTargetConditions(normalizeText(canonicalQuery));
-  const originalConditionKeys = new Set(originalConditions.map((condition) => `${condition.codeId}-${condition.lengthField}`));
-  const canonicalConditionKeys = new Set(canonicalConditions.map((condition) => `${condition.codeId}-${condition.lengthField}`));
+  const relevant = (condition) => condition.codeId !== "99" || condition.lengthField !== "9999";
+  const originalConditionKeys = new Set(originalConditions.filter(relevant).map((condition) => `${condition.codeId}-${condition.lengthField}`));
+  const canonicalConditionKeys = new Set(canonicalConditions.filter(relevant).map((condition) => `${condition.codeId}-${condition.lengthField}`));
 
   if (originalConditionKeys.size > canonicalConditionKeys.size) return false;
   for (const key of originalConditionKeys) {
     if (!canonicalConditionKeys.has(key)) return false;
   }
+  if (originalConditionKeys.size > 0 && canonicalConditionKeys.size !== originalConditionKeys.size) return false;
 
   return true;
+}
+
+function chooseLlmEffectiveQuestion(originalQuestion, llmIntent) {
+  const localIntent = buildIntentUnderstanding(originalQuestion);
+  const localCandidate = buildFirstCommandCandidate(originalQuestion, localIntent);
+  if (localCandidate && !validateGeneratedCommand(localCandidate, localIntent)?.validationFailed) {
+    return originalQuestion;
+  }
+
+  if (!llmIntent?.canonicalQuery || llmIntent.intent !== "data_format_setting" || llmIntent.confidence < 0.7) {
+    return originalQuestion;
+  }
+
+  const detailedCanonical = buildCanonicalQueryFromLlmDetailedIntent(originalQuestion, llmIntent);
+  const candidates = [detailedCanonical, llmIntent.canonicalQuery].filter(Boolean);
+  for (const candidate of candidates) {
+    if (
+      shouldUseLlmCanonicalQuery(originalQuestion, candidate) &&
+      !llmResultDropsCriticalInfo(originalQuestion, { ...llmIntent, canonicalQuery: candidate }) &&
+      buildFirstCommandCandidate(candidate, buildIntentUnderstanding(candidate))
+    ) {
+      return candidate;
+    }
+  }
+
+  return originalQuestion;
+}
+
+function buildCanonicalQueryFromLlmDetailedIntent(originalQuestion, llmIntent) {
+  const detailed = llmIntent?.detailedIntent;
+  if (!detailed || !Array.isArray(detailed.operations)) return "";
+
+  const targetText = buildDetailedIntentTargetText(originalQuestion, detailed);
+  const segmented = detailed.operations.find((operation) => operation.type === "segmented_send_insert");
+  if (segmented?.segments?.length > 0) {
+    const parts = [];
+    segmented.segments.forEach((segment) => {
+      if (segment.sendLength) parts.push(`${segment.sendLength}桁送信`);
+      const insertion = normalizeDetailedInsertValue(segment.insertValue);
+      if (insertion) parts.push(`${insertion}挿入`);
+    });
+    parts.push("残り送信設定");
+    return `${targetText}${parts.join("、")}`;
+  }
+
+  const positionInsert = detailed.operations.find((operation) =>
+    ["insert_control_at_position", "insert_text_at_position"].includes(operation.type) &&
+    operation.position &&
+    operation.value
+  );
+  if (positionInsert) {
+    const value = normalizeDetailedInsertValue(positionInsert.value);
+    const count = positionInsert.count && positionInsert.count > 1 ? `を${positionInsert.count}回` : "";
+    return `${targetText}${positionInsert.position}桁目に${value}${count}付加して出力`;
+  }
+
+  return "";
+}
+
+function buildDetailedIntentTargetText(originalQuestion, detailed) {
+  const originalConditions = buildTargetConditions(normalizeText(originalQuestion));
+  const nonDefault = originalConditions.filter((condition) => condition.codeId !== "99" || condition.lengthField !== "9999");
+  if (nonDefault.length > 0) {
+    const labels = [...new Map(nonDefault.map((condition) => [condition.codeId, condition.label])).values()];
+    const lengths = [...new Set(nonDefault.map((condition) => condition.length).filter((length) => length !== 9999))];
+    return `${labels.join("と")}${lengths.length > 0 ? `の${lengths.join("桁と")}桁読み取り時、` : "読み取り時、"}`;
+  }
+
+  const targets = (detailed.targets || []).map((target) => target.symbology).filter(Boolean);
+  return targets.length > 0 ? `${[...new Set(targets)].join("と")}読み取り時、` : "";
+}
+
+function normalizeDetailedInsertValue(value) {
+  const normalized = normalizeText(value || "");
+  if (!normalized) return "";
+  if (normalized.includes("ハイフン") || normalized === "-" || normalized.includes("hyphen")) return "ハイフン";
+  if (normalized.includes("スペース") || normalized.includes("space") || normalized === "sp") return "スペース";
+  if (normalized.includes("tab")) return "TAB";
+  if (normalized.includes("cr") || normalized.includes("enter") || normalized.includes("エンター")) return "CR";
+  return value;
+}
+
+function llmResultDropsCriticalInfo(originalQuestion, llmIntent) {
+  if (!llmIntent?.canonicalQuery) return false;
+  const original = normalizeText(originalQuestion);
+  const canonical = normalizeText(llmIntent.canonicalQuery);
+  if (/[a-z]{6,}/i.test(original) && !/code|matrix|micro|datamatrix|code128|code39|jan|ean|ocr|qr|hyphen|space|prefix|suffix|enter|shift|ctrl|alt/i.test(original)) {
+    return true;
+  }
+  if (/\bhaifunnwo\b/i.test(original)) return true;
+  const detailedText = [
+    ...(llmIntent.detailedIntent?.preservedTerms || []),
+    ...(llmIntent.detailedIntent?.operations || []).flatMap((operation) => [
+      operation.type,
+      operation.target,
+      operation.value,
+      operation.replacement,
+      ...(operation.segments || []).map((segment) => segment.insertValue),
+    ]),
+  ].map((value) => normalizeText(value || "")).join(" ");
+  const combined = `${canonical} ${detailedText}`;
+
+  const checks = [
+    { present: /\bcr\b|enter|エンター/.test(original), pattern: /\bcr\b|enter|エンター/ },
+    { present: /\btab\b|タブ/.test(original), pattern: /\btab\b|タブ/ },
+    { present: /ハイフン|hyphen|-/.test(original), pattern: /ハイフン|hyphen|-/ },
+    { present: /スペース|space|空白/.test(original), pattern: /スペース|space|空白/ },
+    { present: /削除|除去|消す|消して/.test(original), pattern: /削除|除去|消す|消して|delete/ },
+    { present: /置換|置き換え|変換/.test(original), pattern: /置換|置き換え|変換|replace/ },
+    { present: /0\s*サプレス|ゼロサプレス|zero suppress/.test(original), pattern: /0\s*サプレス|ゼロサプレス|zero suppress/ },
+  ];
+
+  return checks.some((check) => check.present && !check.pattern.test(combined));
 }
 
 function buildRepeatedSuffixControlInsertIntentAction(query) {
@@ -3920,13 +4035,42 @@ function normalizeLlmIntentResult(value) {
     targetSymbologies: Array.isArray(value.targetSymbologies) ? value.targetSymbologies : [],
     readLengths: Array.isArray(value.readLengths) ? value.readLengths : [],
     actions: Array.isArray(value.actions) ? value.actions : [],
+    detailedIntent: normalizeLlmDetailedIntent(value.detailedIntent),
     missingSlots: Array.isArray(value.missingSlots) ? value.missingSlots : [],
     clarifyingQuestion: value.clarifyingQuestion ? String(value.clarifyingQuestion).trim() : "",
     reason: String(value.reason || ""),
   };
 }
 
-async function loadLlmIntentUnderstanding(question) {
+function normalizeLlmDetailedIntent(value) {
+  if (!value || typeof value !== "object") {
+    return { targets: [], operations: [], preservedTerms: [] };
+  }
+
+  return {
+    targets: Array.isArray(value.targets) ? value.targets.map((target) => ({
+      symbology: String(target?.symbology || "").trim(),
+      codeId: target?.codeId == null ? null : String(target.codeId).trim().toUpperCase(),
+      length: Number.isInteger(Number(target?.length)) ? Number(target.length) : null,
+    })).filter((target) => target.symbology || target.codeId || target.length != null) : [],
+    operations: Array.isArray(value.operations) ? value.operations.map((operation) => ({
+      type: String(operation?.type || "unknown"),
+      target: operation?.target == null ? null : String(operation.target),
+      position: Number.isInteger(Number(operation?.position)) ? Number(operation.position) : null,
+      length: Number.isInteger(Number(operation?.length)) ? Number(operation.length) : null,
+      value: operation?.value == null ? null : String(operation.value),
+      replacement: operation?.replacement == null ? null : String(operation.replacement),
+      count: Number.isInteger(Number(operation?.count)) ? Number(operation.count) : null,
+      segments: Array.isArray(operation?.segments) ? operation.segments.map((segment) => ({
+        sendLength: Number.isInteger(Number(segment?.sendLength)) ? Number(segment.sendLength) : null,
+        insertValue: segment?.insertValue == null ? null : String(segment.insertValue),
+      })) : [],
+    })) : [],
+    preservedTerms: Array.isArray(value.preservedTerms) ? value.preservedTerms.map((term) => String(term).trim()).filter(Boolean) : [],
+  };
+}
+
+async function loadLlmIntentUnderstanding(question, options = {}) {
   const apiUrl = getIntentApiUrl();
   const { anonKey } = getSupabaseConfig();
   if (!apiUrl) return null;
@@ -3940,6 +4084,7 @@ async function loadLlmIntentUnderstanding(question) {
       },
       body: JSON.stringify({
         question,
+        ...(options.modelOverride ? { modelOverride: options.modelOverride } : {}),
         conversationHistory: getRecentConversationHistory(),
         relatedCatalogHints: getRelatedCatalogHints(question),
         knownSymbologies: getKnownSymbologyHints(),
@@ -4045,6 +4190,54 @@ function renderAztecBarcodes(root = document) {
   });
 }
 
+function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentUnderstanding(question)) {
+  const builders = [
+    buildMultiClauseCommand,
+    buildReplaceThenRangeCommand,
+    buildTrimLeadingZeroesCommand,
+    buildRemoveTrailingCharactersCommand,
+    buildPrefixValueFilterCommand,
+    buildRepeatedSuffixControlInsertCommand,
+    buildSegmentedSendInsertCommand,
+    buildMultiPositionControlInsertCommand,
+    buildInsertTextAtPositionCommand,
+    buildPrefixB5Command,
+    buildPrefixTextCommand,
+    buildSuffixTextCommand,
+    buildDeleteThenRangeCommand,
+    buildDeleteThenLeadingCommand,
+    buildDeleteThenFromPositionToEndCommand,
+    () => buildCommandFromStructuredNlp(question, intentUnderstanding),
+    buildSymbologyDelayKeyCommand,
+    buildSuffixB5Command,
+    (value) => findExactTransformCommand(value) || findExactSpaceTransformCommand(value),
+    findExactDeleteCharacterCommand,
+    buildUntilCharacterCommand,
+    buildRangeCharactersCommand,
+    buildFromPositionToEndCommand,
+    buildLeadingCharactersCommand,
+  ];
+
+  for (const builder of builders) {
+    const item = builder(question);
+    if (item?.command) return item;
+  }
+
+  const matches = findMatches(question);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function buildFallbackGpt41Command(originalQuestion) {
+  const llmIntent = await loadLlmIntentUnderstanding(originalQuestion, { modelOverride: "gpt-4.1" });
+  if (!llmIntent || llmIntent.intent !== "data_format_setting") return null;
+  if (llmIntent.confidence < 0.7 && llmIntent.clarifyingQuestion) return null;
+
+  const question = chooseLlmEffectiveQuestion(originalQuestion, llmIntent);
+  const intentUnderstanding = buildIntentUnderstanding(question);
+  const item = buildFirstCommandCandidate(question, intentUnderstanding);
+  return item ? { question, intentUnderstanding, item, llmIntent } : null;
+}
+
 async function answerQuestion(question) {
   const originalQuestion = question;
 
@@ -4080,18 +4273,26 @@ async function answerQuestion(question) {
     return;
   }
 
-  if (
-    llmIntent?.intent === "data_format_setting" &&
-    llmIntent.confidence >= 0.7 &&
-    llmIntent.canonicalQuery &&
-    shouldUseLlmCanonicalQuery(question, llmIntent.canonicalQuery)
-  ) {
-    question = llmIntent.canonicalQuery;
-  }
+  question = chooseLlmEffectiveQuestion(question, llmIntent);
 
   const shouldClearSettings = shouldClearSettingsBeforeCommand(originalQuestion) || shouldClearSettingsBeforeCommand(question);
   const intentUnderstanding = buildIntentUnderstanding(question);
-  const commandHtml = (item) => commandToHtml(validateGeneratedCommand(applyClearSettingsPrefix(item, shouldClearSettings), intentUnderstanding));
+  const commandHtml = async (item) => {
+    const checked = validateGeneratedCommand(applyClearSettingsPrefix(item, shouldClearSettings), intentUnderstanding);
+    if (!checked?.validationFailed) return commandToHtml(checked);
+
+    const fallback = await buildFallbackGpt41Command(originalQuestion);
+    if (fallback?.item && fallback?.intentUnderstanding) {
+      const fallbackShouldClear = shouldClearSettingsBeforeCommand(originalQuestion) || shouldClearSettingsBeforeCommand(fallback.question);
+      const fallbackChecked = validateGeneratedCommand(
+        applyClearSettingsPrefix(fallback.item, fallbackShouldClear),
+        fallback.intentUnderstanding
+      );
+      if (!fallbackChecked?.validationFailed) return commandToHtml(fallbackChecked);
+    }
+
+    return commandToHtml(checked);
+  };
   const functionKeyTextAmbiguityHtml = buildFunctionKeyTextAmbiguityHtml(question);
   const multiClauseCommand = buildMultiClauseCommand(question);
   const structuredNlpCommand = buildCommandFromStructuredNlp(question, intentUnderstanding);
@@ -4129,122 +4330,122 @@ async function answerQuestion(question) {
   }
 
   if (multiClauseCommand) {
-    addBotResponse(originalQuestion, commandHtml(multiClauseCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(multiClauseCommand), { html: true });
     return;
   }
 
   if (replaceThenRangeCommand) {
-    addBotResponse(originalQuestion, commandHtml(replaceThenRangeCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(replaceThenRangeCommand), { html: true });
     return;
   }
 
   if (trimLeadingZeroesCommand) {
-    addBotResponse(originalQuestion, commandHtml(trimLeadingZeroesCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(trimLeadingZeroesCommand), { html: true });
     return;
   }
 
   if (removeTrailingCharactersCommand) {
-    addBotResponse(originalQuestion, commandHtml(removeTrailingCharactersCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(removeTrailingCharactersCommand), { html: true });
     return;
   }
 
   if (prefixValueFilterCommand) {
-    addBotResponse(originalQuestion, commandHtml(prefixValueFilterCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(prefixValueFilterCommand), { html: true });
     return;
   }
 
   if (repeatedSuffixControlInsertCommand) {
-    addBotResponse(originalQuestion, commandHtml(repeatedSuffixControlInsertCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(repeatedSuffixControlInsertCommand), { html: true });
     return;
   }
 
   if (segmentedSendInsertCommand) {
-    addBotResponse(originalQuestion, commandHtml(segmentedSendInsertCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(segmentedSendInsertCommand), { html: true });
     return;
   }
 
   if (multiPositionControlInsertCommand) {
-    addBotResponse(originalQuestion, commandHtml(multiPositionControlInsertCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(multiPositionControlInsertCommand), { html: true });
     return;
   }
 
   if (insertTextAtPositionCommand) {
-    addBotResponse(originalQuestion, commandHtml(insertTextAtPositionCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(insertTextAtPositionCommand), { html: true });
     return;
   }
 
   if (prefixB5Command) {
-    addBotResponse(originalQuestion, commandHtml(prefixB5Command), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(prefixB5Command), { html: true });
     return;
   }
 
   if (prefixTextCommand) {
-    addBotResponse(originalQuestion, commandHtml(prefixTextCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(prefixTextCommand), { html: true });
     return;
   }
 
   if (suffixTextCommand) {
-    addBotResponse(originalQuestion, commandHtml(suffixTextCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(suffixTextCommand), { html: true });
     return;
   }
 
   if (deleteThenRangeCommand) {
-    addBotResponse(originalQuestion, commandHtml(deleteThenRangeCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(deleteThenRangeCommand), { html: true });
     return;
   }
 
   if (deleteThenLeadingCommand) {
-    addBotResponse(originalQuestion, commandToHtml(applyClearSettingsPrefix(deleteThenLeadingCommand, shouldClearSettings)), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(deleteThenLeadingCommand), { html: true });
     return;
   }
 
   if (deleteThenFromPositionToEndCommand) {
-    addBotResponse(originalQuestion, commandHtml(deleteThenFromPositionToEndCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(deleteThenFromPositionToEndCommand), { html: true });
     return;
   }
 
   if (structuredNlpCommand) {
-    addBotResponse(originalQuestion, commandHtml(structuredNlpCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(structuredNlpCommand), { html: true });
     return;
   }
 
   if (symbologyDelayKeyCommand) {
-    addBotResponse(originalQuestion, commandHtml(symbologyDelayKeyCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(symbologyDelayKeyCommand), { html: true });
     return;
   }
 
   if (suffixB5Command) {
-    addBotResponse(originalQuestion, commandHtml(suffixB5Command), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(suffixB5Command), { html: true });
     return;
   }
 
   if (exactTransformCommand) {
-    addBotResponse(originalQuestion, commandHtml(exactTransformCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(exactTransformCommand), { html: true });
     return;
   }
 
   if (exactDeleteCommand) {
-    addBotResponse(originalQuestion, commandHtml(exactDeleteCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(exactDeleteCommand), { html: true });
     return;
   }
 
   if (untilCharacterCommand) {
-    addBotResponse(originalQuestion, commandHtml(untilCharacterCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(untilCharacterCommand), { html: true });
     return;
   }
 
   if (generatedRangeCommand) {
-    addBotResponse(originalQuestion, commandHtml(generatedRangeCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(generatedRangeCommand), { html: true });
     return;
   }
 
   if (fromPositionToEndCommand) {
-    addBotResponse(originalQuestion, commandHtml(fromPositionToEndCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(fromPositionToEndCommand), { html: true });
     return;
   }
 
   if (generatedLeadingCommand) {
-    addBotResponse(originalQuestion, commandHtml(generatedLeadingCommand), { html: true });
+    addBotResponse(originalQuestion, await commandHtml(generatedLeadingCommand), { html: true });
     return;
   }
 
@@ -4279,7 +4480,7 @@ async function answerQuestion(question) {
     return;
   }
 
-  addBotResponse(originalQuestion, matches.map(commandHtml).join(""), { html: true });
+  addBotResponse(originalQuestion, (await Promise.all(matches.map(commandHtml))).join(""), { html: true });
 }
 
 function submitQuestion(question) {

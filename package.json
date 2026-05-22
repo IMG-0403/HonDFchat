@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "test": "node --test tests/intent-command.test.js"
+    "test": "node --test tests/intent-command.test.js",
+    "test:llm": "node tests/llm-intent-regression.js"
   },
   "devDependencies": {
     "supabase": "^2.98.2"
