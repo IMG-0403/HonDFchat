@@ -1100,7 +1100,9 @@ function buildCommonCommandIntent(question, structured = null) {
     .filter((condition) => condition.length !== 9999 || condition.source !== "default")
     .map((condition) => condition.length))];
   const actions = [];
-  const repeatedSuffixAction = buildRepeatedSuffixControlInsertIntentAction(question);
+  const segmentedSendInsertAction = buildSegmentedSendInsertIntentAction(question);
+  if (segmentedSendInsertAction) actions.push(segmentedSendInsertAction);
+  const repeatedSuffixAction = segmentedSendInsertAction ? null : buildRepeatedSuffixControlInsertIntentAction(question);
   if (repeatedSuffixAction) actions.push(repeatedSuffixAction);
   const b5Action = repeatedSuffixAction ? null : buildB5AppendIntentAction(question);
   if (b5Action) actions.push(b5Action);
@@ -1111,6 +1113,17 @@ function buildCommonCommandIntent(question, structured = null) {
     symbologies,
     readLengths,
     actions,
+  };
+}
+
+function buildSegmentedSendInsertIntentAction(query) {
+  const steps = findSegmentedSendInsertSequence(query);
+  if (steps.length === 0) return null;
+  const editorCommand = `${steps.map((step) => `F2${String(step.count).padStart(2, "0")}${step.hex}`).join("")}F100`;
+  return {
+    type: "segmented_send_insert",
+    editorCommand,
+    steps,
   };
 }
 
@@ -3273,8 +3286,7 @@ function validateGeneratedCommand(item, intentUnderstanding) {
   if (/FB[0-9A-F]{2}[0-9A-F]+F7F2[0-9]{2}00/i.test(command)) return item;
   const validationErrors = [];
   const targetConditions = intentUnderstanding.targetConditions || [];
-  const pairedConditions = targetConditions.filter((condition) => condition.source === "paired");
-  const conditionsToCheck = pairedConditions.length >= 2 ? pairedConditions : [];
+  const conditionsToCheck = getValidationTargetConditions(targetConditions);
 
   conditionsToCheck.forEach((condition) => {
     const conditionPrefix = `0099${condition.codeId}${condition.lengthField}`;
@@ -3346,7 +3358,22 @@ function getExpectedEditorCommandsForAction(action) {
   }
   if (action.type === "remove_trailing") return [`E9${String(action.characterCount).padStart(2, "0")}`];
   if (action.type === "suffix_repeated_character") return [action.command];
+  if (action.type === "segmented_send_insert") return [action.editorCommand];
   if (action.type === "zero_suppress") return ["E630F100"];
+  return [];
+}
+
+function getValidationTargetConditions(targetConditions) {
+  const pairedConditions = targetConditions.filter((condition) => condition.source === "paired");
+  if (pairedConditions.length >= 2) return pairedConditions;
+
+  const explicitConditions = targetConditions.filter((condition) =>
+    condition.codeId !== "99" &&
+    condition.lengthField &&
+    condition.lengthField !== "9999"
+  );
+  if (explicitConditions.length >= 1) return explicitConditions;
+
   return [];
 }
 
@@ -3394,6 +3421,8 @@ function buildGenerationCheckNotes(intentUnderstanding) {
       notes.push(`生成前チェック: 末尾付加のため F100${action.command} の順序を確認しました。`);
     } else if (action.type === "remove_trailing") {
       notes.push(`生成前チェック: 末尾${action.characterCount}桁削除のため E9${String(action.characterCount).padStart(2, "0")} を確認しました。`);
+    } else if (action.type === "segmented_send_insert") {
+      notes.push(`生成前チェック: 分割送信と挿入の編集コマンド ${action.editorCommand} を確認しました。`);
     }
   });
 
