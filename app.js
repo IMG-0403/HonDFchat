@@ -626,11 +626,42 @@ function findExactAdminCommandMatches(query) {
   const normalizedQuery = normalizeText(query);
   if (!normalizedQuery) return [];
 
-  return adminCommandCatalog.filter((item) => {
+  const exactMatches = adminCommandCatalog.filter((item) => {
     const requestText = normalizeText(item.requestText || "");
     const label = normalizeText(item.label || "");
     return normalizedQuery === requestText || normalizedQuery === label;
   });
+  if (exactMatches.length > 0) return exactMatches;
+
+  const relaxedQuery = normalizeAdminCommandMatchText(query);
+  if (!relaxedQuery) return [];
+
+  return adminCommandCatalog.filter((item) =>
+    getAdminCommandMatchTexts(item).some((text) => normalizeAdminCommandMatchText(text) === relaxedQuery)
+  );
+}
+
+function getAdminCommandMatchTexts(item) {
+  return [...new Set([item.requestText || "", item.label || ""].filter(Boolean))];
+}
+
+function normalizeAdminCommandMatchText(value) {
+  let text = normalizeText(value)
+    .replace(/[\s、。，,.・･／\/:：;；!！?？()（）「」『』【】［］\[\]{}｛｝"'“”‘’`]+/g, "")
+    .replace(/読取/g, "読み取り")
+    .replace(/追加|付ける|つける/g, "付加")
+    .replace(/除去|消して|消す/g, "削除")
+    .replace(/送信|表示/g, "出力");
+
+  let previous = "";
+  while (text && text !== previous) {
+    previous = text;
+    text = text
+      .replace(/(?:の)?(?:設定|登録|作成)(?:してください|して下さい|して|お願いします|お願い)?$/g, "")
+      .replace(/(?:してください|して下さい|お願いします|お願い|ください|下さい|です|の場合|場合)$/g, "");
+  }
+
+  return text;
 }
 
 function getSymbologyTarget(normalizedQuery) {
