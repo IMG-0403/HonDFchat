@@ -3213,6 +3213,16 @@ function commandToHtml(item) {
           aria-label="設定用バーコード"
         ></canvas>
         <p class="barcode-status">生成中...</p>
+        <div class="barcode-contact">
+          <p>生成された設定バーコード読み取り後、ご希望通りに動作しない場合は下記にご連絡ください。</p>
+          <p class="contact-mail">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16v12H4z" />
+              <path d="m4 7 8 6 8-6" />
+            </svg>
+            <span>infohp@imagers.co.jp</span>
+          </p>
+        </div>
       </div>
     </div>
   `;
