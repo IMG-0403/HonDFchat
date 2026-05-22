@@ -998,7 +998,7 @@ function parseStructuredNlpRequest(query) {
   if (!structured.operation) {
     const deleteChars = findDeleteTargetCharacters(query);
     const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
-    const deleteFromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+    const deleteFromMatch = normalizedQuery.match(/(?<!\d)(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
     const deleteLeadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁/);
     if (mentionsDelete && deleteChars.length > 0 && deleteFromMatch) {
       structured.operation = {
@@ -1018,7 +1018,7 @@ function parseStructuredNlpRequest(query) {
   }
 
   if (!structured.operation) {
-    const rangeMatches = [...normalizedQuery.matchAll(/(\d{1,2})\s*桁目\s*から\s*(\d{1,2})\s*桁/g)];
+    const rangeMatches = [...normalizedQuery.matchAll(/(?<!\d)(\d{1,4})\s*桁目\s*から\s*(\d{1,2})\s*桁/g)];
     if (rangeMatches.length > 0) {
       structured.operation = {
         type: "range",
@@ -1028,7 +1028,7 @@ function parseStructuredNlpRequest(query) {
   }
 
   if (!structured.operation) {
-    const fromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+    const fromMatch = normalizedQuery.match(/(?<!\d)(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
     if (fromMatch) {
       structured.operation = { type: "fromPositionToEnd", startPosition: Number(fromMatch[1]) };
     }
@@ -1213,7 +1213,7 @@ function buildCanonicalQueryFromLlmDetailedIntent(originalQuestion, llmIntent) {
       const insertion = normalizeDetailedInsertValue(segment.insertValue);
       if (insertion) parts.push(`${insertion}挿入`);
     });
-    parts.push("残り送信設定");
+    parts.push("設定");
     return `${targetText}${parts.join("、")}`;
   }
 
@@ -1887,10 +1887,26 @@ function splitSendCounts(totalCount) {
   return counts;
 }
 
+function splitCursorMoves(totalCount) {
+  const moves = [];
+  let remaining = totalCount;
+  while (remaining > 0) {
+    const move = Math.min(99, remaining);
+    moves.push(move);
+    remaining -= move;
+  }
+  return moves;
+}
+
+function buildCursorMoveCommand(totalCount) {
+  if (totalCount === 0) return "F500";
+  return splitCursorMoves(totalCount).map((move) => `F5${String(move).padStart(2, "0")}`).join("");
+}
+
 function buildRangeCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const rangeMatches = [...normalizedQuery.matchAll(/(\d{1,2})\s*桁目\s*から\s*(\d{1,2})\s*桁/g)];
-  const structuredStartMatch = normalizedQuery.match(/(?:スタート|開始)\s*桁\s*[:：]?\s*(\d{1,2})\s*桁目?/);
+  const rangeMatches = [...normalizedQuery.matchAll(/(?<!\d)(\d{1,4})\s*桁目\s*から\s*(\d{1,2})\s*桁/g)];
+  const structuredStartMatch = normalizedQuery.match(/(?:スタート|開始)\s*桁\s*[:：]?\s*(\d{1,4})\s*桁目?/);
   const structuredCountMatch = normalizedQuery.match(/(?:出力|送信|表示)\s*桁数\s*[:：]?\s*(\d{1,2})\s*桁/);
 
   if (rangeMatches.length === 0 && structuredStartMatch && structuredCountMatch) {
@@ -1912,7 +1928,7 @@ function buildRangeCharactersCommand(query) {
     !Number.isInteger(range.startPosition) ||
     !Number.isInteger(range.characterCount) ||
     range.startPosition < 1 ||
-    range.startPosition > 99 ||
+    range.startPosition > 9999 ||
     range.characterCount < 1 ||
     range.characterCount > 99
   )) return null;
@@ -1925,11 +1941,10 @@ function buildRangeCharactersCommand(query) {
   const rangeNotes = [];
   for (const range of ranges) {
     const cursorMove = range.startPosition - cursorPosition;
-    if (cursorMove < 0 || cursorMove > 99) return null;
+    if (cursorMove < 0) return null;
 
-    const cursorHex = cursorMove.toString().padStart(2, "0");
     const countHex = range.characterCount.toString().padStart(2, "0");
-    commandParts.push(`F5${cursorHex}F2${countHex}00`);
+    commandParts.push(`${buildCursorMoveCommand(cursorMove)}F2${countHex}00`);
     rangeNotes.push(`${range.startPosition}桁目から${range.characterCount}桁`);
     cursorPosition = range.startPosition + range.characterCount;
   }
@@ -1959,18 +1974,17 @@ function buildRangeCharactersCommand(query) {
 
 function buildFromPositionToEndCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const match = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+  const match = normalizedQuery.match(/(?<!\d)(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
 
   if (!match || !/(出力|送信|表示|取り出|切り出)/.test(normalizedQuery)) return null;
 
   const startPosition = Number(match[1]);
-  if (!Number.isInteger(startPosition) || startPosition < 1 || startPosition > 99) return null;
+  if (!Number.isInteger(startPosition) || startPosition < 1 || startPosition > 9999) return null;
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengths = getReadLengths(normalizedQuery);
   const cursorMove = startPosition - 1;
-  const cursorHex = cursorMove.toString().padStart(2, "0");
-  const editorCommand = `F5${cursorHex}F100`;
+  const editorCommand = `${buildCursorMoveCommand(cursorMove)}F100`;
   const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
   const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
   const lengthNote = readLengths.length > 0
@@ -1978,7 +1992,7 @@ function buildFromPositionToEndCommand(query) {
     : "9999 は全桁数を表す指定です。";
 
   return {
-    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-from-${cursorHex}-to-end`,
+    id: `df-generated-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-from-${cursorMove}-to-end`,
     label: `${codeLabel}・${lengthLabel} ${startPosition}桁目以降を出力`,
     category: "登録例",
     summary: `${codeLabel}を対象に、読み取りデータの${startPosition}桁目以降を出力します。`,
@@ -1986,7 +2000,7 @@ function buildFromPositionToEndCommand(query) {
     command: buildDataFormatCommandFromBlocks(buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand)),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
-      `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F100 でそこから末尾まで送信します。`,
+      `${editorCommand.replace(/F100$/, "")} でカーソルを${cursorMove}桁移動し、F100 でそこから末尾まで送信します。`,
     ],
   };
 }
@@ -2507,7 +2521,6 @@ function buildRepeatedSuffixControlInsertCommand(query) {
 function findSegmentedSendInsertSequence(query) {
   const asciiQuery = normalizeAsciiText(query);
   const mentionsRemainder = /(残り|残余|以降|末尾まで|最後まで)\s*(?:を)?\s*(?:送信|出力|表示)/.test(asciiQuery);
-  if (!mentionsRemainder) return [];
 
   const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
   const segments = asciiQuery.split(/\s*(?:、|,|，|\n)\s*/).map((segment) => segment.trim()).filter(Boolean);
@@ -2528,6 +2541,18 @@ function findSegmentedSendInsertSequence(query) {
     index += 1;
   }
 
+  if (steps.length === 0 && /[+＋]/.test(asciiQuery)) {
+    const plusPattern = new RegExp(`(\\d{1,2})\\s*桁\\s*(?:を)?\\s*(?:送信|出力|表示)?\\s*[+＋]\\s*(${tokenPattern})(?=\\s*(?:[+＋]|設定|送信|出力|表示|$))`, "gi");
+    let match;
+    while ((match = plusPattern.exec(asciiQuery)) !== null) {
+      const insertion = normalizeInsertControlToken(match[2]);
+      const count = Number(match[1]);
+      if (!insertion || !Number.isInteger(count) || count < 1 || count > 99) return [];
+      steps.push({ count, ...insertion });
+    }
+  }
+
+  if (!mentionsRemainder && steps.length < 2) return [];
   return steps;
 }
 
@@ -2549,15 +2574,15 @@ function buildSegmentedSendInsertCommand(query) {
 
   return {
     id: `df-generated-segmented-send-insert-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${editorCommand}`,
-    label: `${codeLabel}・${lengthLabel} ${stepLabel}を挿入して残り送信`,
+    label: `${codeLabel}・${lengthLabel} ${stepLabel}を挿入`,
     category: "登録例",
-    summary: `${codeLabel}を対象に、${stepLabel}を挿入し、最後に残りのデータを送信します。`,
+    summary: `${codeLabel}を対象に、${stepLabel}を挿入して出力します。`,
     keywords: [],
     command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       ...steps.map((step) => `F2${String(step.count).padStart(2, "0")}${step.hex} は現在位置から${step.count}桁を送信し、${step.label}を追加する指定です。`),
-      "F100 は最後に残りの読み取りデータを全て送信する指定です。",
+      "F100 は続きの読み取りデータを全て送信する指定です。",
     ],
   };
 }
@@ -3496,8 +3521,7 @@ function getExpectedEditorCommandsForAction(action) {
   if (action.type === "replace") return [`E402${action.sourceHex}${action.targetHex}`];
   if (action.type === "delete") return [`FB${String((action.hex || "").length / 2).padStart(2, "0")}${action.hex}`];
   if (action.type === "output_from_position_to_end") {
-    const cursorHex = String(action.startPosition - 1).padStart(2, "0");
-    return [`F5${cursorHex}F100`];
+    return [`${buildCursorMoveCommand(action.startPosition - 1)}F100`];
   }
   if (action.type === "output_leading") {
     return splitSendCounts(action.characterCount).map((count) => `F2${String(count).padStart(2, "0")}00`);
@@ -3527,8 +3551,7 @@ function getExpectedFullEditorCommands(actions) {
   const deleteAction = actions.find((action) => action.type === "delete");
   const fromAction = actions.find((action) => action.type === "output_from_position_to_end");
   if (deleteAction && fromAction) {
-    const cursorHex = String(fromAction.startPosition - 1).padStart(2, "0");
-    return [`FB${String((deleteAction.hex || "").length / 2).padStart(2, "0")}${deleteAction.hex}F7F5${cursorHex}F100`];
+    return [`FB${String((deleteAction.hex || "").length / 2).padStart(2, "0")}${deleteAction.hex}F7${buildCursorMoveCommand(fromAction.startPosition - 1)}F100`];
   }
 
   const leadingAction = actions.find((action) => action.type === "output_leading");
@@ -3543,8 +3566,8 @@ function getExpectedFullEditorCommands(actions) {
     const parts = [];
     for (const range of rangeAction.ranges) {
       const cursorMove = range.startPosition - cursorPosition;
-      if (cursorMove < 0 || cursorMove > 99) return [];
-      parts.push(`F5${String(cursorMove).padStart(2, "0")}F2${String(range.characterCount).padStart(2, "0")}00`);
+      if (cursorMove < 0) return [];
+      parts.push(`${buildCursorMoveCommand(cursorMove)}F2${String(range.characterCount).padStart(2, "0")}00`);
       cursorPosition = range.startPosition + range.characterCount;
     }
     return [parts.join("")];
