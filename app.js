@@ -3976,6 +3976,14 @@ function describeEditorCommands(commandHex) {
       continue;
     }
 
+    if (code === "F3" && index + 6 <= commandHex.length) {
+      const targetHex = commandHex.slice(index + 2, index + 4).toUpperCase();
+      const insertHex = commandHex.slice(index + 4, index + 6).toUpperCase();
+      descriptions.push(`F3${targetHex}${insertHex}: 現在位置から ${describeHexCharacter(targetHex)} が出現する手前までを出力します${insertHex === "00" ? "" : `。最後に ${describeHexCharacter(insertHex)} を追加します`}`);
+      index += 6;
+      continue;
+    }
+
     if (code === "F1" && index + 4 <= commandHex.length) {
       const insertHex = commandHex.slice(index + 2, index + 4).toUpperCase();
       descriptions.push(`F1${insertHex}: 現在位置から末尾までを出力します${insertHex === "00" ? "" : `。最後に ${insertHex} を追加します`}`);
@@ -3995,6 +4003,13 @@ function describeEditorCommands(commandHex) {
       descriptions.push("F7: カーソルを読み取りデータの先頭へ戻します。");
       cursorPosition = 1;
       index += 2;
+      continue;
+    }
+
+    if (code === "F8" && index + 4 <= commandHex.length) {
+      const targetHex = commandHex.slice(index + 2, index + 4).toUpperCase();
+      descriptions.push(`F8${targetHex}: 現在位置から ${describeHexCharacter(targetHex)} が出現する手前までカーソルを移動します。`);
+      index += 4;
       continue;
     }
 
