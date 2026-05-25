@@ -1527,6 +1527,61 @@ function buildUntilCharacterCommand(query) {
   };
 }
 
+function findOutputAfterNthCharacter(query) {
+  const normalizedCaseQuery = query
+    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\s+/g, " ")
+    .trim();
+  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const patterns = [
+    new RegExp(`(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(${tokenPattern})\\s*(?:の)?\\s*(?:後ろ|後|以降|後方)\\s*(?:から|の)?\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
+    new RegExp(`(${tokenPattern})\\s*(?:の)?\\s*(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(?:後ろ|後|以降|後方)\\s*(?:から|の)?\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalizedCaseQuery.match(pattern);
+    if (!match) continue;
+    const count = Number(/^\d/.test(match[1]) ? match[1] : match[2]);
+    const token = /^\d/.test(match[1]) ? match[2] : match[1];
+    const char = normalizeReplaceCharacter(token);
+    if (char && Number.isInteger(count) && count >= 1 && count <= 99) return { count, char };
+  }
+
+  return null;
+}
+
+function buildOutputAfterNthCharacterCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const target = findOutputAfterNthCharacter(query);
+  if (!target) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const targetHex = target.char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const targetLabel = describeReplaceCharacter(target.char);
+  const searchMove = `F8${targetHex}F501`;
+  const editorCommand = `${searchMove.repeat(target.count)}F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-after-nth-${targetHex}-${target.count}-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
+    label: `${codeLabel}・${lengthLabel} ${target.count}個目の${targetLabel}後ろからデータ出力`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、${target.count}個目の${targetLabel}の後ろから末尾までを出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `F8${targetHex} は次の ${targetLabel} の手前までカーソルを移動し、F501 はその1文字後ろへ移動する指定です。`,
+      `この組み合わせを${target.count}回繰り返し、F100 でそこから末尾まで送信します。`,
+    ],
+  };
+}
+
 function buildCommandFromStructuredNlp(question, intentUnderstanding = buildIntentUnderstanding(question)) {
   const structured = intentUnderstanding?.structured;
   if (!structured || intentUnderstanding.confidence < 0.7) return null;
@@ -1541,6 +1596,7 @@ function buildCommandFromStructuredNlp(question, intentUnderstanding = buildInte
     findExactSpaceTransformCommand,
     buildDeleteThenFromPositionToEndCommand,
     findExactDeleteCharacterCommand,
+    buildOutputAfterNthCharacterCommand,
     buildRangeCharactersCommand,
     buildFromPositionToEndCommand,
     buildLeadingCharactersCommand,
@@ -4283,6 +4339,7 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
     (value) => findExactTransformCommand(value) || findExactSpaceTransformCommand(value),
     findExactDeleteCharacterCommand,
     buildUntilCharacterCommand,
+    buildOutputAfterNthCharacterCommand,
     buildRangeCharactersCommand,
     buildFromPositionToEndCommand,
     buildLeadingCharactersCommand,
@@ -4385,6 +4442,7 @@ async function answerQuestion(question) {
   const deleteThenFromPositionToEndCommand = buildDeleteThenFromPositionToEndCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
   const untilCharacterCommand = buildUntilCharacterCommand(question);
+  const outputAfterNthCharacterCommand = buildOutputAfterNthCharacterCommand(question);
   const generatedRangeCommand = buildRangeCharactersCommand(question);
   const fromPositionToEndCommand = buildFromPositionToEndCommand(question);
   const generatedLeadingCommand = buildLeadingCharactersCommand(question);
@@ -4501,6 +4559,11 @@ async function answerQuestion(question) {
 
   if (untilCharacterCommand) {
     addBotResponse(originalQuestion, await commandHtml(untilCharacterCommand), { html: true });
+    return;
+  }
+
+  if (outputAfterNthCharacterCommand) {
+    addBotResponse(originalQuestion, await commandHtml(outputAfterNthCharacterCommand), { html: true });
     return;
   }
 
