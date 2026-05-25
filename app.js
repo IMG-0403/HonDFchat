@@ -1172,7 +1172,7 @@ function buildCommonCommandIntent(question, structured = null) {
 function buildSegmentedSendInsertIntentAction(query) {
   const steps = findSegmentedSendInsertSequence(query);
   if (steps.length === 0) return null;
-  const editorCommand = buildSegmentedSendInsertEditorCommand(steps);
+  const editorCommand = buildSegmentedSendInsertEditorCommand(steps, hasSegmentedSendInsertRemainder(query));
   return {
     type: "segmented_send_insert",
     editorCommand,
@@ -2542,7 +2542,7 @@ function buildRepeatedSuffixControlInsertCommand(query) {
 
 function findSegmentedSendInsertSequence(query) {
   const asciiQuery = normalizeAsciiText(query);
-  const mentionsRemainder = /(残り|残余|以降|末尾まで|最後まで)\s*(?:を)?\s*(?:送信|出力|表示)/.test(asciiQuery);
+  const mentionsRemainder = hasSegmentedSendInsertRemainder(query);
 
   const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
   const segments = asciiQuery.split(/\s*(?:、|,|，|\n)\s*/).map((segment) => segment.trim()).filter(Boolean);
@@ -2582,14 +2582,19 @@ function findSegmentedSendInsertSequence(query) {
   return steps;
 }
 
-function buildSegmentedSendInsertEditorCommand(steps) {
+function hasSegmentedSendInsertRemainder(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  return /(残り|残余|以降|末尾まで|最後まで)\s*(?:の)?\s*(?:読み取りデータ|読取データ|データ|桁)?\s*(?:を)?\s*(?:送信|出力|表示)/.test(asciiQuery);
+}
+
+function buildSegmentedSendInsertEditorCommand(steps, includeRemainder = false) {
   const parts = steps.map((step) => {
     const sendCount = String(step.count).padStart(2, "0");
     const insertCount = step.insertCount || 1;
     if (insertCount > 1) return `F2${sendCount}00F4${step.hex}${String(insertCount).padStart(2, "0")}`;
     return `F2${sendCount}${step.hex}`;
   });
-  return `${parts.join("")}F100`;
+  return `${parts.join("")}${includeRemainder ? "F100" : ""}`;
 }
 
 function buildSegmentedSendInsertCommand(query) {
@@ -2600,7 +2605,8 @@ function buildSegmentedSendInsertCommand(query) {
 
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengths = getReadLengths(normalizedQuery);
-  const editorCommand = buildSegmentedSendInsertEditorCommand(steps);
+  const includeRemainder = hasSegmentedSendInsertRemainder(query);
+  const editorCommand = buildSegmentedSendInsertEditorCommand(steps, includeRemainder);
   const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
   const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
   const lengthNote = readLengths.length > 0
@@ -2623,7 +2629,7 @@ function buildSegmentedSendInsertCommand(query) {
         }
         return `F2${String(step.count).padStart(2, "0")}${step.hex} は現在位置から${step.count}桁を送信し、${step.label}を追加する指定です。`;
       }),
-      "F100 は続きの読み取りデータを全て送信する指定です。",
+      ...(includeRemainder ? ["F100 は続きの読み取りデータを全て送信する指定です。"] : []),
     ],
   };
 }
