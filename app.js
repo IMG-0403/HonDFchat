@@ -3983,6 +3983,21 @@ function describeEditorCommands(commandHex) {
       continue;
     }
 
+    if (code === "FE" && index + 4 <= commandHex.length) {
+      const targetHex = commandHex.slice(index + 2, index + 4).toUpperCase();
+      descriptions.push(`FE${targetHex}: 現在位置の文字が ${describeHexCharacter(targetHex)} と一致するか比較し、一致時にカーソルを1桁進めます。`);
+      cursorPosition += 1;
+      index += 4;
+      continue;
+    }
+
+    if (code === "F7") {
+      descriptions.push("F7: カーソルを読み取りデータの先頭へ戻します。");
+      cursorPosition = 1;
+      index += 2;
+      continue;
+    }
+
     if (code === "E9" && index + 4 <= commandHex.length) {
       const count = Number(commandHex.slice(index + 2, index + 4));
       descriptions.push(`E9${commandHex.slice(index + 2, index + 4)}: 現在位置から末尾までのうち、最後の${count}桁を除いたデータを出力します。`);
@@ -4072,12 +4087,23 @@ function describeEditorCommands(commandHex) {
   return descriptions;
 }
 
+function describeAdminCommand(command) {
+  const normalizedCommand = normalizeSettingCommand(command).toUpperCase();
+  const item = commandCatalog.find((entry) => normalizeSettingCommand(entry.command).toUpperCase() === normalizedCommand);
+  return item ? `${normalizedCommand}: ${item.label}。${item.summary}` : `${normalizedCommand}: 管理コマンドです。`;
+}
+
 function explainDataFormatCommandToHtml(rawCommand) {
   const command = normalizeSettingCommand(rawCommand).replace(/\s+/g, "").toUpperCase();
-  const withoutClear = command.startsWith("DFMDF3;") ? command.slice("DFMDF3;".length) : command;
-  if (!withoutClear.startsWith("DFMBK3")) return "";
+  const commandParts = command.replace(/\.$/, "").split(";").filter(Boolean);
+  const hasClearCommand = commandParts[0] === "DFMDF3";
+  const dataFormatCommand = commandParts.find((part) => part.startsWith("DFMBK3"));
+  if (!dataFormatCommand) return "";
+  const adminCommands = commandParts
+    .filter((part) => part !== dataFormatCommand && part !== "DFMDF3")
+    .map(normalizeSettingCommand);
 
-  const fragments = withoutClear.replace(/\.$/, "").split("|");
+  const fragments = dataFormatCommand.split("|");
   const conditionHtml = fragments.map((fragment, index) => {
     const body = index === 0 ? fragment.slice("DFMBK3".length) : fragment;
     if (body.length < 10) return `<p>条件 ${index + 1}: 条件ブロックの長さが不足しています。</p>`;
@@ -4105,6 +4131,9 @@ function explainDataFormatCommandToHtml(rawCommand) {
       </div>
     `;
   }).join("");
+  const adminHtml = adminCommands.length > 0
+    ? `<div class="df-explain-condition"><strong>追加設定</strong><ol>${adminCommands.map((part) => `<li>${escapeHtml(describeAdminCommand(part))}</li>`).join("")}</ol></div>`
+    : "";
 
   return `
     <div class="command-card">
@@ -4121,8 +4150,9 @@ function explainDataFormatCommandToHtml(rawCommand) {
           >${icons.copy}</button>
         </div>
       </div>
-      ${command.startsWith("DFMDF3;") ? "<p>先頭の DFMDF3; により、現在のデータフォーマット設定を削除してから登録します。</p>" : ""}
+      ${hasClearCommand ? "<p>先頭の DFMDF3; により、現在のデータフォーマット設定を削除してから登録します。</p>" : ""}
       ${conditionHtml}
+      ${adminHtml}
     </div>
   `;
 }
