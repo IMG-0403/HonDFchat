@@ -481,7 +481,7 @@ const symbologyCodeTable = [
   { codeId: "78", label: "MaxiCode", aliases: ["maxicode", "maxi code"] },
   { codeId: "72", label: "PDF417", aliases: ["pdf417", "pdf 417"] },
   { codeId: "52", label: "Micro PDF417", aliases: ["micro pdf417", "micro pdf 417"] },
-  { codeId: "73", label: "QRコード", aliases: ["qr", "qrコード", "qr code", "microqr", "micro qr", "micro qr code"] },
+  { codeId: "73", label: "QRコード", aliases: ["qr", "qrコード", "qr code", "qrcode", "microqr", "micro qr", "micro qr code"] },
   { codeId: "4F", label: "OCR", aliases: ["ocr"] },
   { codeId: "41", label: "Australian Post", aliases: ["australian post"] },
   { codeId: "42", label: "British Post", aliases: ["british post"] },
@@ -1533,6 +1533,69 @@ function buildUntilCharacterCommand(query) {
   };
 }
 
+function findSearchUntilCharacterSequences(query) {
+  const normalizedCaseQuery = query
+    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\s+/g, " ")
+    .trim();
+  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const pattern = new RegExp(`(${tokenPattern})\\s*(以降|から|後ろから|後から|の後ろから|の後から)\\s*(${tokenPattern})\\s*(?:手前)?\\s*まで\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "gi");
+  const sequences = [];
+  let match;
+
+  while ((match = pattern.exec(normalizedCaseQuery)) !== null) {
+    const startChar = normalizeReplaceCharacter(match[1]);
+    const endChar = normalizeReplaceCharacter(match[3]);
+    if (!startChar || !endChar) continue;
+    sequences.push({
+      startChar,
+      endChar,
+      includeStart: match[2] === "以降" || match[2] === "から",
+    });
+  }
+
+  return sequences;
+}
+
+function buildSearchUntilCharacterCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const sequences = findSearchUntilCharacterSequences(query);
+  if (sequences.length === 0) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const commandParts = sequences.map((sequence, index) => {
+    const startHex = sequence.startChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+    const endHex = sequence.endChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+    const reset = index > 0 ? "F7" : "";
+    const startMove = sequence.includeStart ? "" : "F501";
+    return `${reset}F8${startHex}${startMove}F3${endHex}00`;
+  });
+  const editorCommand = commandParts.join("");
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+  const sequenceLabel = sequences.map((sequence) =>
+    `${describeReplaceCharacter(sequence.startChar)}${sequence.includeStart ? "以降" : "後ろから"}${describeReplaceCharacter(sequence.endChar)}まで`
+  ).join("、");
+
+  return {
+    id: `df-generated-search-until-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${editorCommand}`,
+    label: `${codeLabel}・${lengthLabel} ${sequenceLabel}出力`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、${sequenceLabel}のデータを出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      "F8xx は指定文字の手前までカーソルを移動し、F3xxxx は現在位置から指定文字の手前まで送信します。",
+      "複数箇所を取り出す場合は F7 でカーソルを先頭へ戻してから次の検索を行います。",
+    ],
+  };
+}
+
 function findOutputAfterNthCharacter(query) {
   const normalizedCaseQuery = query
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
@@ -1602,6 +1665,7 @@ function buildCommandFromStructuredNlp(question, intentUnderstanding = buildInte
     findExactSpaceTransformCommand,
     buildDeleteThenFromPositionToEndCommand,
     findExactDeleteCharacterCommand,
+    buildSearchUntilCharacterCommand,
     buildOutputAfterNthCharacterCommand,
     buildRangeCharactersCommand,
     buildFromPositionToEndCommand,
@@ -1824,7 +1888,7 @@ function getOperationTargetLabel(operation) {
 }
 
 function findTrailingDeleteCount(normalizedQuery) {
-  const mentionsDelete = ["削除", "除去", "消す", "消して", "取り除", "カット"].some((word) =>
+  const mentionsDelete = ["削除", "除去", "消す", "消して", "取り除", "カット", "送信しない", "出力しない", "表示しない", "送らない", "除外"].some((word) =>
     normalizedQuery.includes(normalizeText(word))
   );
   if (!mentionsDelete) return 0;
@@ -1833,6 +1897,9 @@ function findTrailingDeleteCount(normalizedQuery) {
     /(?:末尾|最後)(?:から|の)?\s*(\d{1,2})\s*桁(?:分|の)?\s*(?:データ|文字)?\s*(?:を)?\s*(?:削除|除去|消す|消して|取り除|カット)/,
     /(?:末尾|最後)(?:の)?\s*(?:データ|文字)?\s*(\d{1,2})\s*桁(?:分)?\s*(?:を)?\s*(?:削除|除去|消す|消して|取り除|カット)/,
     /(?:データ|文字)?\s*(?:末尾|最後)(?:から|の)?\s*(\d{1,2})\s*桁(?:分)?\s*(?:を)?\s*(?:削除|除去|消す|消して|取り除|カット)/,
+    /(?:末尾|最後)(?:から|の)?\s*(\d{1,2})\s*桁(?:分|の)?\s*(?:データ|文字)?\s*(?:を)?\s*(?:送信しない|出力しない|表示しない|送らない|除外)/,
+    /(?:末尾|最後)(?:の)?\s*(?:データ|文字)?\s*(\d{1,2})\s*桁(?:分)?\s*(?:を)?\s*(?:送信しない|出力しない|表示しない|送らない|除外)/,
+    /(?:データ|文字)?\s*(?:末尾|最後)(?:から|の)?\s*(\d{1,2})\s*桁(?:分)?\s*(?:を)?\s*(?:送信しない|出力しない|表示しない|送らない|除外)/,
   ];
 
   for (const pattern of patterns) {
@@ -1885,15 +1952,15 @@ function findPrefixValueFilter(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsPrefix = /(先頭文字|先頭値|先頭コード|先頭|prefix)/i.test(normalizedQuery);
   const mentionsOnly = /(のみ|だけ|限定|一致|場合)/.test(normalizedQuery);
-  const mentionsOutput = /(読取出力|読み取り出力|出力|送信|表示)/.test(normalizedQuery);
+  const mentionsOutput = /(読取出力|読み取り出力|読み取り|読取|出力|送信|表示)/.test(normalizedQuery);
   if (!mentionsPrefix || !mentionsOnly || !mentionsOutput) return null;
 
   const asciiQuery = normalizeAsciiText(query);
-  const match = asciiQuery.match(/(?:先頭文字|先頭値|先頭コード|先頭)\s*([0-9]{2,4}(?:\s*(?:、|,|，|\/|\+|&|and|と)\s*[0-9]{2,4})+)/i);
+  const match = asciiQuery.match(/(?:先頭文字|先頭値|先頭コード|先頭)\s*(?:が|は|=|:|：)?\s*([A-Z0-9]{1,4}(?:\s*(?:、|,|，|\/|\+|&|and|と)\s*[A-Z0-9]{1,4})*)\s*(?=(?:の|が|は|のみ|だけ|限定|一致|時|とき|場合|なら|で|を|読取|読み取り|出力|送信|表示|$))/i);
   if (!match) return null;
 
-  const values = [...new Set((match[1].match(/[0-9]{2,4}/g) || []))];
-  if (values.length === 0 || values.some((value) => value.length < 2 || value.length > 4)) return null;
+  const values = [...new Set((match[1].match(/[A-Z0-9]{1,4}/gi) || []).map((value) => value.toUpperCase()))];
+  if (values.length === 0 || values.some((value) => value.length < 1 || value.length > 4)) return null;
   return values;
 }
 
@@ -4342,8 +4409,9 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
     () => buildCommandFromStructuredNlp(question, intentUnderstanding),
     buildSymbologyDelayKeyCommand,
     buildSuffixB5Command,
-    (value) => findExactTransformCommand(value) || findExactSpaceTransformCommand(value),
+    (value) => findExactSpaceTransformCommand(value) || findExactTransformCommand(value),
     findExactDeleteCharacterCommand,
+    buildSearchUntilCharacterCommand,
     buildUntilCharacterCommand,
     buildOutputAfterNthCharacterCommand,
     buildRangeCharactersCommand,
@@ -4442,11 +4510,12 @@ async function answerQuestion(question) {
   const suffixTextCommand = buildSuffixTextCommand(question);
   const suffixB5Command = buildSuffixB5Command(question);
   const symbologyDelayKeyCommand = buildSymbologyDelayKeyCommand(question);
-  const exactTransformCommand = findExactTransformCommand(question) || findExactSpaceTransformCommand(question);
+  const exactTransformCommand = findExactSpaceTransformCommand(question) || findExactTransformCommand(question);
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const deleteThenLeadingCommand = buildDeleteThenLeadingCommand(question);
   const deleteThenFromPositionToEndCommand = buildDeleteThenFromPositionToEndCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
+  const searchUntilCharacterCommand = buildSearchUntilCharacterCommand(question);
   const untilCharacterCommand = buildUntilCharacterCommand(question);
   const outputAfterNthCharacterCommand = buildOutputAfterNthCharacterCommand(question);
   const generatedRangeCommand = buildRangeCharactersCommand(question);
@@ -4560,6 +4629,11 @@ async function answerQuestion(question) {
 
   if (exactDeleteCommand) {
     addBotResponse(originalQuestion, await commandHtml(exactDeleteCommand), { html: true });
+    return;
+  }
+
+  if (searchUntilCharacterCommand) {
+    addBotResponse(originalQuestion, await commandHtml(searchUntilCharacterCommand), { html: true });
     return;
   }
 
