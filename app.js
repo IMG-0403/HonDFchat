@@ -377,6 +377,7 @@ const characterHexTable = [
 ];
 
 const b5KeyMapTable = [
+  { key: "半/全", hex: "01", aliases: ["半角全角", "半角/全角", "半角全角キー", "半角/全角キー", "半全", "hankaku", "zenkaku", "hankaku/zenkaku"] },
   { key: "A", hex: "1F", aliases: ["a", "アルファベットA"] },
   { key: "B", hex: "31", aliases: ["b", "アルファベットB"] },
   { key: "C", hex: "2F", aliases: ["c", "アルファベットC"] },
@@ -918,6 +919,7 @@ function buildSingleClauseCommand(clause) {
     buildInsertTextAtPositionCommand,
     buildPrefixTextCommand,
     buildSuffixTextCommand,
+    buildPrefixSuffixB5Command,
     buildPrefixB5Command,
     buildSuffixB5Command,
     buildSymbologyDelayKeyCommand,
@@ -2490,6 +2492,50 @@ function buildPrefixB5Command(query) {
       `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は ${item.label}`).join("、")} を表す指定です。`,
       lengthNote,
       `${keystrokeCommand} は先頭に ${keystrokeLabel} キーを付加し、F100 はその後に読み取りデータを全て出力する指定です。左右指定がない修飾キーは左優先です。`,
+      "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。",
+    ],
+  };
+}
+
+function buildPrefixSuffixB5Command(query) {
+  const normalizedQuery = normalizeText(query);
+  const mentionsPrefix = prefixWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsSuffix = ["末尾", "後ろ", "最後", "サフィックス", "suffix"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = settingAppendWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+
+  if (!mentionsPrefix || !mentionsSuffix || !mentionsAppend || hasPlainTextAppendTarget(query)) return null;
+
+  const key = findB5KeyForAppend(query);
+  if (!key) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengthsForSuffixB5(normalizedQuery);
+  const pairedLengthConditions = getSymbologyLengthPairs(normalizedQuery);
+  const modifier = getB5ModifierForAppend(query);
+  const keystrokeCommand = `B501${modifier.hex}${key.hex}`;
+  const keystrokeLabel = `${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key}`;
+  const editorCommand = `${keystrokeCommand}F100${keystrokeCommand}`;
+  const codeLabel = symbologyTargets.map((item) => item.label).join("、");
+  const lengthLabel = pairedLengthConditions.length >= 2
+    ? pairedLengthConditions.map((pair) => `${pair.target.label}${pair.length}桁`).join("、")
+    : readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = pairedLengthConditions.length >= 2
+    ? pairedLengthConditions.map((pair) => `${pair.target.codeId}${String(pair.length).padStart(4, "0")} は${pair.target.label}${pair.length}桁を対象にする指定です。`).join(" ")
+    : readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-prefix-suffix-b5-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${keystrokeCommand}`,
+    label: `${codeLabel}・${lengthLabel} 先頭と末尾に${keystrokeLabel}を付加`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、読み取りデータの先頭と末尾に${keystrokeLabel}キーを付加します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(buildTargetBlocksForPairedLengths(normalizedQuery, symbologyTargets, readLengths, editorCommand)),
+    notes: [
+      `0 は Primary Data Format、099 は全端末、${symbologyTargets.map((item) => `${item.codeId} は ${item.label}`).join("、")} を表す指定です。`,
+      lengthNote,
+      `${keystrokeCommand} は ${keystrokeLabel} キー入力、F100 は読み取りデータを全て出力する指定です。`,
       "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。",
     ],
   };
@@ -4468,6 +4514,7 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
     buildRepeatedSuffixControlInsertCommand,
     buildMultiPositionControlInsertCommand,
     buildInsertTextAtPositionCommand,
+    buildPrefixSuffixB5Command,
     buildPrefixB5Command,
     buildPrefixTextCommand,
     buildSuffixTextCommand,
@@ -4574,6 +4621,7 @@ async function answerQuestion(question) {
   const segmentedSendInsertCommand = buildSegmentedSendInsertCommand(question);
   const multiPositionControlInsertCommand = buildMultiPositionControlInsertCommand(question);
   const insertTextAtPositionCommand = buildInsertTextAtPositionCommand(question);
+  const prefixSuffixB5Command = buildPrefixSuffixB5Command(question);
   const prefixB5Command = buildPrefixB5Command(question);
   const prefixTextCommand = buildPrefixTextCommand(question);
   const suffixTextCommand = buildSuffixTextCommand(question);
@@ -4648,6 +4696,11 @@ async function answerQuestion(question) {
 
   if (insertTextAtPositionCommand) {
     addBotResponse(originalQuestion, await commandHtml(insertTextAtPositionCommand), { html: true });
+    return;
+  }
+
+  if (prefixSuffixB5Command) {
+    addBotResponse(originalQuestion, await commandHtml(prefixSuffixB5Command), { html: true });
     return;
   }
 
