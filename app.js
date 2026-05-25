@@ -669,8 +669,15 @@ function getSymbologyTarget(normalizedQuery) {
   return targets[0]?.codeId === "99" ? null : targets[0];
 }
 
+function matchesExplicitSymbologyCodeId(normalizedQuery, codeId) {
+  const id = escapeRegExp(normalizeText(codeId));
+  return new RegExp(`(?:コード\\s*(?:種)?\\s*id|シンボル\\s*id|symbology\\s*id|code\\s*id)\\s*(?:指定|は|=|:|：)?\\s*${id}(?=$|[^a-z0-9])`, "i").test(normalizedQuery);
+}
+
 function matchesSymbologyTerm(normalizedQuery, item) {
-  const terms = [item.codeId, item.label, ...(item.aliases || [])]
+  if (matchesExplicitSymbologyCodeId(normalizedQuery, item.codeId)) return true;
+
+  const terms = [item.label, ...(item.aliases || [])]
     .map(normalizeText)
     .filter(Boolean)
     .sort((a, b) => b.length - a.length);
@@ -705,10 +712,9 @@ function getSymbologyTargets(normalizedQuery) {
 
 function getSymbologyTargetLegacy(normalizedQuery) {
   return symbologyCodeTable.find((item) => {
-    const codeId = normalizeText(item.codeId);
     const label = normalizeText(item.label);
     const aliases = (item.aliases || []).map(normalizeText);
-    return normalizedQuery.includes(codeId) || normalizedQuery.includes(label) || aliases.some((alias) => normalizedQuery.includes(alias));
+    return matchesExplicitSymbologyCodeId(normalizedQuery, item.codeId) || normalizedQuery.includes(label) || aliases.some((alias) => normalizedQuery.includes(alias));
   }) || null;
 }
 
