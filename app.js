@@ -2578,6 +2578,8 @@ function normalizeInsertControlToken(value) {
   const normalized = normalizeText(value);
   if (["tab", "タブ", "ht"].includes(normalized)) return { label: "TAB", hex: "09" };
   if (["cr", "enter", "エンター"].includes(normalized)) return { label: "ENTER", hex: "0D" };
+  if (["lf", "ラインフィード"].includes(normalized)) return { label: "LF", hex: "0A" };
+  if (["crlf", "cr+lf", "cr lf", "改行コード"].includes(normalized)) return { label: "CRLF", hex: "0D0A" };
   if (["sp", "space", "スペース", "空白"].includes(normalized)) return { label: "スペース", hex: "20" };
   if (["esc", "escape", "エスケープ"].includes(normalized)) return { label: "ESC", hex: "1B" };
   if (["bs", "backspace", "バックスペース"].includes(normalized)) return { label: "BS", hex: "08" };
@@ -2596,6 +2598,71 @@ function normalizeInsertControlToken(value) {
     };
   }
   return null;
+}
+
+function findDelayMilliseconds(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  const millisecondMatch = asciiQuery.match(/(\d{1,5})\s*(?:m\s*秒|ms|ミリ秒)/i);
+  if (millisecondMatch) {
+    const milliseconds = Number(millisecondMatch[1]);
+    if (Number.isInteger(milliseconds) && milliseconds >= 5 && milliseconds <= 49995 && milliseconds % 5 === 0) {
+      return milliseconds;
+    }
+    return null;
+  }
+
+  const secondMatch = asciiQuery.match(/(\d{1,2}(?:\.\d+)?)\s*秒/);
+  if (secondMatch) {
+    const milliseconds = Math.round(Number(secondMatch[1]) * 1000);
+    if (Number.isInteger(milliseconds) && milliseconds >= 5 && milliseconds <= 49995 && milliseconds % 5 === 0) {
+      return milliseconds;
+    }
+  }
+
+  return null;
+}
+
+function buildOutputControlDelayCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const asciiQuery = normalizeAsciiText(query);
+  const mentionsAllOutput = /(全桁|全データ|すべて|全て|読み取りデータ)\s*(?:を)?\s*(?:出力|送信|表示)/.test(normalizedQuery);
+  const mentionsDelay = /(ディレイ|delay|待機|m\s*秒|ms|ミリ秒|\d+(?:\.\d+)?\s*秒)/i.test(asciiQuery);
+  if (!mentionsAllOutput || !mentionsDelay) return null;
+
+  const control = /cr\s*\+?\s*lf|crlf|改行コード/i.test(asciiQuery)
+    ? { label: "CRLF", hex: "0D0A" }
+    : normalizeInsertControlToken((asciiQuery.match(/(?:後|あと|付加|挿入)\s*(CR|LF|TAB|ENTER|エンター|CRLF)/i) || [])[1] || "");
+  const delayMs = findDelayMilliseconds(query);
+  if (!control || !delayMs) return null;
+
+  const delayCount = delayMs / 5;
+  if (!Number.isInteger(delayCount) || delayCount < 1 || delayCount > 9999) return null;
+  const delayCommand = `EF${String(delayCount).padStart(4, "0")}`;
+  const insertCommand = control.hex.length === 2
+    ? `F1${control.hex}`
+    : `BA${String(control.hex.length / 2).padStart(4, "0")}${control.hex}`;
+  const editorCommand = `F100${insertCommand}${delayCommand}`;
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-output-${control.hex}-delay-${delayMs}`,
+    label: `${codeLabel}・${lengthLabel} 全桁出力後${control.label}と${delayMs}msディレイ`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、読み取りデータを全桁出力後、${control.label}を付加して${delayMs}ms待機します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `F100 は読み取りデータを全て出力し、${insertCommand} は ${control.label} を挿入する指定です。`,
+      `${delayCommand} は5ms単位で${delayCount}回、つまり${delayMs}ms待機する指定です。`,
+    ],
+  };
 }
 
 function findMultiPositionControlInsertions(query) {
@@ -4396,6 +4463,7 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
     buildTrimLeadingZeroesCommand,
     buildRemoveTrailingCharactersCommand,
     buildPrefixValueFilterCommand,
+    buildOutputControlDelayCommand,
     buildSegmentedSendInsertCommand,
     buildRepeatedSuffixControlInsertCommand,
     buildMultiPositionControlInsertCommand,
@@ -4501,6 +4569,7 @@ async function answerQuestion(question) {
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
   const removeTrailingCharactersCommand = buildRemoveTrailingCharactersCommand(question);
   const prefixValueFilterCommand = buildPrefixValueFilterCommand(question);
+  const outputControlDelayCommand = buildOutputControlDelayCommand(question);
   const repeatedSuffixControlInsertCommand = buildRepeatedSuffixControlInsertCommand(question);
   const segmentedSendInsertCommand = buildSegmentedSendInsertCommand(question);
   const multiPositionControlInsertCommand = buildMultiPositionControlInsertCommand(question);
@@ -4554,6 +4623,11 @@ async function answerQuestion(question) {
 
   if (prefixValueFilterCommand) {
     addBotResponse(originalQuestion, await commandHtml(prefixValueFilterCommand), { html: true });
+    return;
+  }
+
+  if (outputControlDelayCommand) {
+    addBotResponse(originalQuestion, await commandHtml(outputControlDelayCommand), { html: true });
     return;
   }
 
