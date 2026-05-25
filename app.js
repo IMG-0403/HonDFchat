@@ -3903,6 +3903,7 @@ function describeHexCharacter(hex) {
   const normalizedHex = String(hex || "").toUpperCase();
   const labels = {
     "08": "BS",
+    "0A": "LF",
     "09": "TAB",
     "0D": "CR",
     "1B": "ESC",
@@ -3922,6 +3923,23 @@ function describeHexCharacter(hex) {
   }
 
   return normalizedHex;
+}
+
+function describeInsertedHexString(textHex) {
+  const normalizedHex = String(textHex || "").toUpperCase();
+  const bytes = normalizedHex.match(/.{2}/g) || [];
+  if (bytes.length === 0) return normalizedHex;
+
+  const allPrintable = bytes.every((hex) => {
+    const codePoint = parseInt(hex, 16);
+    return Number.isFinite(codePoint) && codePoint >= 0x21 && codePoint <= 0x7e;
+  });
+
+  if (allPrintable) {
+    return bytes.map((hex) => String.fromCharCode(parseInt(hex, 16))).join("");
+  }
+
+  return `${bytes.map(describeHexCharacter).join("")} (${normalizedHex})`;
 }
 
 function isDataFormatCommandText(value) {
@@ -4026,7 +4044,7 @@ function describeEditorCommands(commandHex) {
       const hexStart = index + 6;
       const hexEnd = hexStart + count * 2;
       const textHex = commandHex.slice(hexStart, hexEnd).toUpperCase();
-      const text = textHex.match(/.{2}/g)?.map((hex) => String.fromCharCode(parseInt(hex, 16))).join("") || textHex;
+      const text = describeInsertedHexString(textHex);
       descriptions.push(`BA${commandHex.slice(index + 2, hexEnd)}: 現在位置に文字列 ${text} を挿入します。`);
       index = hexEnd;
       continue;
