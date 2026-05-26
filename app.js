@@ -93,11 +93,11 @@ const commandCatalog = [
     id: "df-example-replace-gs-with-space",
     label: "GS/FNC1コードをスペースに置換",
     category: "登録例",
-    summary: "コード種、桁数に関係なく、GS/FNC1コードをスペースに置き換えて出力します。",
+    summary: "GS1-128とGS1 DataMatrixを対象に、GS/FNC1コードをスペースに置き換えて出力します。",
     requestText: "GS1-128とGS1 DataMatrixのFNC1をスペース文字に置き換え",
     keywords: ["gs", "gsコード", "gsキャラクター", "fnc1", "fnc 1", "group separator", "グループセパレータ", "gs1-128", "gs1 128", "gs1 datamatrix", "gs-1datamatrix", "gs1 data matrix", "スペース", "space", "置換", "置き換え", "変換", "e4", "1d", "20", "全コード", "全桁"],
-    command: "DFMBK30099999999E4021D20F100.",
-    notes: ["0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。", "GS1-128やGS1 DataMatrixの可変長AI区切りで使われるFNC1は、出力データ上では GSキャラクタ(1D) として扱います。", "E4 は置換コマンド、02 は置換キャラクタ数、1D は置換前の GS/FNC1、20 は置換後のスペースです。", "F100 は置換完了後に全てのデータを送信する指定です。"],
+    command: "DFMBK30099499999E4021D20F100|0099779999E4021D20F100.",
+    notes: ["0 は Primary Data Format、099 は全端末、49 は GS1-128、77 は Data Matrix、9999 は全桁数を表す指定です。", "GS1-128やGS1 DataMatrixの可変長AI区切りで使われるFNC1は、出力データ上では GSキャラクタ(1D) として扱います。", "E4 は置換コマンド、02 は置換キャラクタ数、1D は置換前の GS/FNC1、20 は置換後のスペースです。", "F100 は置換完了後に全てのデータを送信する指定です。"],
   },
   {
     id: "df-example-replace-space-with-a",
@@ -3838,6 +3838,10 @@ function getValidationTargetConditions(targetConditions) {
   const pairedConditions = targetConditions.filter((condition) => condition.source === "paired");
   if (pairedConditions.length >= 2) return pairedConditions;
 
+  const explicitCodeConditions = targetConditions.filter((condition) => condition.codeId !== "99");
+  const uniqueExplicitCodes = new Set(explicitCodeConditions.map((condition) => condition.codeId));
+  if (uniqueExplicitCodes.size >= 2) return explicitCodeConditions;
+
   const explicitConditions = targetConditions.filter((condition) =>
     condition.codeId !== "99" &&
     condition.lengthField &&
@@ -4648,8 +4652,10 @@ async function answerQuestion(question) {
     const intentUnderstanding = buildIntentUnderstanding(question);
     const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
     const item = validateGeneratedCommand(applyClearSettingsPrefix(exactAdminMatches[0], shouldClearSettings), intentUnderstanding);
-    addBotResponse(originalQuestion, commandToHtml(item), { html: true });
-    return;
+    if (!item?.validationFailed) {
+      addBotResponse(originalQuestion, commandToHtml(item), { html: true });
+      return;
+    }
   }
 
   const llmIntent = await loadLlmIntentUnderstanding(question);
