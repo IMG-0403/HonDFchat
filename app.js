@@ -91,12 +91,13 @@ const commandCatalog = [
   },
   {
     id: "df-example-replace-gs-with-space",
-    label: "GSコードをスペースに置換",
+    label: "GS/FNC1コードをスペースに置換",
     category: "登録例",
-    summary: "コード種、桁数に関係なく、GSコードをスペースに置き換えて出力します。",
-    keywords: ["gs", "gsコード", "gsキャラクター", "group separator", "グループセパレータ", "スペース", "space", "置換", "置き換え", "変換", "e4", "1d", "20", "全コード", "全桁"],
+    summary: "コード種、桁数に関係なく、GS/FNC1コードをスペースに置き換えて出力します。",
+    requestText: "GS1-128とGS1 DataMatrixのFNC1をスペース文字に置き換え",
+    keywords: ["gs", "gsコード", "gsキャラクター", "fnc1", "fnc 1", "group separator", "グループセパレータ", "gs1-128", "gs1 128", "gs1 datamatrix", "gs-1datamatrix", "gs1 data matrix", "スペース", "space", "置換", "置き換え", "変換", "e4", "1d", "20", "全コード", "全桁"],
     command: "DFMBK30099999999E4021D20F100.",
-    notes: ["0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。", "E4 は置換コマンド、02 は置換キャラクタ数、1D は置換前の GS、20 は置換後のスペースです。", "F100 は置換完了後に全てのデータを送信する指定です。"],
+    notes: ["0 は Primary Data Format、099 は全端末、99 は全コード種、9999 は全桁数を表す指定です。", "GS1-128やGS1 DataMatrixの可変長AI区切りで使われるFNC1は、出力データ上では GSキャラクタ(1D) として扱います。", "E4 は置換コマンド、02 は置換キャラクタ数、1D は置換前の GS/FNC1、20 は置換後のスペースです。", "F100 は置換完了後に全てのデータを送信する指定です。"],
   },
   {
     id: "df-example-replace-space-with-a",
@@ -478,7 +479,7 @@ const symbologyCodeTable = [
   { codeId: "56", label: "Codablock A", aliases: ["codablock a"] },
   { codeId: "71", label: "Codablock F", aliases: ["codablock f"] },
   { codeId: "6C", label: "Code49", aliases: ["code49", "code 49"] },
-  { codeId: "77", label: "Data Matrix", aliases: ["data matrix", "datamatrix", "データマトリックス"] },
+  { codeId: "77", label: "Data Matrix", aliases: ["data matrix", "datamatrix", "データマトリックス", "gs1 datamatrix", "gs-1datamatrix", "gs1 data matrix", "gs-1 data matrix"] },
   { codeId: "78", label: "MaxiCode", aliases: ["maxicode", "maxi code"] },
   { codeId: "72", label: "PDF417", aliases: ["pdf417", "pdf 417"] },
   { codeId: "52", label: "Micro PDF417", aliases: ["micro pdf417", "micro pdf 417"] },
@@ -1489,7 +1490,7 @@ function findUntilCharacter(query) {
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
     .replace(/\s+/g, " ")
     .trim();
-  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|fnc1|fnc 1|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
   const patterns = [
     new RegExp(`(${tokenPattern})\\s*まで\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
     new RegExp(`(${tokenPattern})\\s*手前\\s*まで\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
@@ -1540,7 +1541,7 @@ function findSearchUntilCharacterSequences(query) {
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
     .replace(/\s+/g, " ")
     .trim();
-  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|fnc1|fnc 1|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
   const pattern = new RegExp(`(${tokenPattern})\\s*(以降|から|後ろから|後から|の後ろから|の後から)\\s*(${tokenPattern})\\s*(?:手前)?\\s*まで\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "gi");
   const sequences = [];
   let match;
@@ -1603,7 +1604,7 @@ function findOutputAfterNthCharacter(query) {
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
     .replace(/\s+/g, " ")
     .trim();
-  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|fnc1|fnc 1|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
   const patterns = [
     new RegExp(`(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(${tokenPattern})\\s*(?:の)?\\s*(?:後ろ|後|以降|後方)\\s*(?:から|の)?\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
     new RegExp(`(${tokenPattern})\\s*(?:の)?\\s*(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(?:後ろ|後|以降|後方)\\s*(?:から|の)?\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
@@ -2160,7 +2161,7 @@ function buildFromPositionToEndCommand(query) {
 
 function findExactTransformCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const mentionsGs = ["gs", "gsコード", "gsキャラクター", "group separator", "グループセパレータ"].some((word) =>
+  const mentionsGs = ["gs", "gsコード", "gsキャラクター", "fnc1", "fnc 1", "group separator", "グループセパレータ"].some((word) =>
     normalizedQuery.includes(normalizeText(word))
   );
   const mentionsReplace = ["置換", "置き換え", "置き換えて", "変換"].some((word) =>
@@ -2195,19 +2196,29 @@ function findExactSpaceTransformCommand(query) {
 
   const sourceHex = sourceChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
   const targetHex = targetChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
-  const symbology = getSymbologyTarget(normalizedQuery);
-  const codeId = symbology ? symbology.codeId : "99";
-  const codeLabel = symbology ? symbology.label : "全コード種";
+  const conditions = buildTargetConditions(normalizedQuery);
+  const uniqueTargets = [];
+  conditions.forEach((condition) => {
+    if (!uniqueTargets.some((target) => target.codeId === condition.codeId)) {
+      uniqueTargets.push({ codeId: condition.codeId, label: condition.label });
+    }
+  });
+  const codeLabel = uniqueTargets.length === 1 && uniqueTargets[0].codeId === "99"
+    ? "全コード種"
+    : uniqueTargets.map((target) => target.label).join("と");
+  const codeNote = uniqueTargets.length === 1 && uniqueTargets[0].codeId === "99"
+    ? "99 は全コード種"
+    : uniqueTargets.map((target) => `${target.codeId} は${target.label}`).join("、");
 
   return {
-    id: `df-generated-replace-${sourceHex}-with-${targetHex}-${codeId}`,
+    id: `df-generated-replace-${sourceHex}-with-${targetHex}-${uniqueTargets.map((target) => target.codeId).join("-")}`,
     label: `${codeLabel} ${describeReplaceCharacter(sourceChar)}を${describeReplaceCharacter(targetChar)}に置換`,
     category: "登録例",
     summary: `${codeLabel}を対象に、${describeReplaceCharacter(sourceChar)}を${describeReplaceCharacter(targetChar)}に置き換えて出力します。`,
     keywords: [],
     command: buildDataFormatCommandFromIntentConditions(query, `E402${sourceHex}${targetHex}F100`),
     notes: [
-      `0 は Primary Data Format、099 は全端末、${codeId} は${codeLabel}、9999 は全桁数を表す指定です。`,
+      `0 は Primary Data Format、099 は全端末、${codeNote}、9999 は全桁数を表す指定です。`,
       `E4 は置換コマンド、02 は置換キャラクタ数、${sourceHex} は置換前の ${describeReplaceCharacter(sourceChar)}、${targetHex} は置換後の ${describeReplaceCharacter(targetChar)} です。`,
       "F100 は置換完了後に全てのデータを送信する指定です。",
     ],
@@ -2220,8 +2231,9 @@ function findReplaceCharacters(query) {
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
     .replace(/\s+/g, " ")
     .trim();
+  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|fnc1|fnc 1|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|gs|[!-~]";
   const transformMatch = normalizedCaseQuery.match(
-    /([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ)\s*を\s*([!-~]|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ)\s*(?:に|へ)?\s*(?:置換|置き換え|置き換えて|変換)/i
+    new RegExp(`(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*を\\s*(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*(?:に|へ)?\\s*(?:置換|置き換え|置き換えて|変換)`, "i")
   );
 
   if (!transformMatch) return null;
@@ -2346,7 +2358,7 @@ function normalizeReplaceCharacter(value) {
   if (["ハイフン", "hyphen", "マイナス", "minus"].includes(lowered)) return "-";
   if (["カンマ", "comma"].includes(lowered)) return ",";
   if (["cr", "enter", "エンター", "改行"].includes(lowered)) return "\x0D";
-  if (["gs", "gsコード", "gsキャラクタ", "gsキャラクター", "group separator", "グループセパレータ"].includes(lowered)) return "\x1D";
+  if (["gs", "gsコード", "gsキャラクタ", "gsキャラクター", "fnc1", "fnc 1", "group separator", "グループセパレータ"].includes(lowered)) return "\x1D";
   if (normalized.length === 1 && normalized >= "!" && normalized <= "~") return normalized;
   return null;
 }
