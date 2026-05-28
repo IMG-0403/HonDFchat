@@ -907,6 +907,7 @@ function buildSingleClauseCommand(clause) {
     buildReplaceThenDeleteCommand,
     buildTrimLeadingZeroesCommand,
     buildRemoveTrailingCharactersCommand,
+    buildPrefixValueThenFromPositionCommand,
     findExactSpaceTransformCommand,
     buildDeleteThenLeadingCommand,
     buildDeleteThenFromPositionToEndCommand,
@@ -2017,6 +2018,47 @@ function buildPrefixValueFilterCommand(query) {
       `${target.codeId} は${target.label}、${lengthField} は${readLengths.length === 1 ? `${readLengths[0]}桁` : "全桁数"}を表す指定です。`,
       "FE は現在位置の文字を比較し、一致した場合だけカーソルを進める指定です。",
       "F7F100 は比較後にカーソルを先頭へ戻し、読み取りデータ全体を出力します。",
+      "DFM_EN2 は一致必須、DFMDEC1 は不一致時のエラー音OFFです。",
+    ],
+  };
+}
+
+function buildPrefixValueThenFromPositionCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const prefixValues = findPrefixValueFilter(query);
+  const fromMatch = normalizedQuery.match(/(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+  if (!prefixValues || !fromMatch) return null;
+
+  const startPosition = Number(fromMatch[1]);
+  if (!Number.isInteger(startPosition) || startPosition < 1 || startPosition > 99) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const target = symbologyTargets.length === 1 ? symbologyTargets[0] : getSymbologyTargetLegacy(normalizedQuery);
+  if (!target || target.codeId === "99") return null;
+
+  const readLengths = getReadLengths(normalizedQuery);
+  const lengthField = readLengths.length === 1 ? String(readLengths[0]).padStart(4, "0") : "9999";
+  const blocks = prefixValues.map((value) => {
+    const compareCommand = [...value].map((char) => `FE${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`).join("");
+    const cursorAfterCompare = value.length + 1;
+    const moveCommand = startPosition > cursorAfterCompare ? buildCursorMoveCommand(startPosition - cursorAfterCompare) : "";
+    const outputCommand = startPosition >= cursorAfterCompare ? `${moveCommand}F100` : `${buildCursorMoveCommand(startPosition - 1)}F100`;
+    return `0099${target.codeId}${lengthField}${compareCommand}${outputCommand}`;
+  });
+  const command = `${buildDataFormatCommandFromBlocks(blocks).replace(/\.$/, "")};DFM_EN2;DFMDEC1.`;
+
+  return {
+    id: `df-generated-prefix-filter-from-position-${target.codeId}-${lengthField}-${prefixValues.join("-")}-${startPosition}`,
+    label: `${target.label}・先頭${prefixValues.join("、")}の場合 ${startPosition}桁目から出力`,
+    category: "登録例",
+    summary: `${target.label}を対象に、先頭文字列が${prefixValues.join("、")}に一致するデータだけ、${startPosition}桁目から出力します。`,
+    keywords: [],
+    command,
+    skipGenerationValidation: true,
+    notes: [
+      `${target.codeId} は${target.label}、${lengthField} は${readLengths.length === 1 ? `${readLengths[0]}桁` : "全桁数"}を表す指定です。`,
+      "FE は現在位置の文字を比較し、一致した場合だけカーソルを1桁進める指定です。",
+      "比較後はカーソルを先頭へ戻さず、指定位置から読み取りデータを出力します。",
       "DFM_EN2 は一致必須、DFMDEC1 は不一致時のエラー音OFFです。",
     ],
   };
@@ -4705,6 +4747,7 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
     buildReplaceThenDeleteCommand,
     buildTrimLeadingZeroesCommand,
     buildRemoveTrailingCharactersCommand,
+    buildPrefixValueThenFromPositionCommand,
     buildPrefixValueFilterCommand,
     buildOutputControlDelayCommand,
     buildSegmentedSendInsertCommand,
