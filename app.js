@@ -1505,6 +1505,7 @@ function characterToRequestToken(char) {
 function findUntilCharacter(query) {
   const normalizedCaseQuery = query
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/[「」『』【】［］\[\]“”]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|fnc1|fnc 1|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
@@ -2251,6 +2252,7 @@ function getReplaceTokenPattern() {
 function findReplaceCharacterPairs(query) {
   const normalizedCaseQuery = query
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/[「」『』【】［］\[\]“”]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   const tokenPattern = getReplaceTokenPattern();
