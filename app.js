@@ -1009,12 +1009,14 @@ function parseStructuredNlpRequest(query) {
     canonicalQuery: "",
   };
 
-  const replaceChars = findReplaceCharacters(query);
+  const replacePairs = findReplaceCharacterPairs(query);
+  const replaceChars = replacePairs[0] || null;
   if (replaceChars) {
     structured.operation = {
       type: "replace",
       sourceChar: replaceChars.sourceChar,
       targetChar: replaceChars.targetChar,
+      replacements: replacePairs,
     };
   } else {
     const trailingDeleteCount = findTrailingDeleteCount(normalizedQuery);
@@ -1406,6 +1408,8 @@ function buildIntentActions(operation) {
       target: characterToRequestToken(operation.targetChar),
       sourceHex: charsToHex([operation.sourceChar]),
       targetHex: charsToHex([operation.targetChar]),
+      replacements: operation.replacements || [{ sourceChar: operation.sourceChar, targetChar: operation.targetChar }],
+      editorCommand: buildReplaceEditorCommand(operation.replacements || [{ sourceChar: operation.sourceChar, targetChar: operation.targetChar }], ""),
     }];
   }
   if (operation.type === "range") {
@@ -1450,7 +1454,11 @@ function buildCanonicalQueryFromStructuredNlp(structured) {
   }
 
   if (operation.type === "replace") {
-    return `${scopePrefix}${characterToRequestToken(operation.sourceChar)}を${characterToRequestToken(operation.targetChar)}に置換`;
+    const replacements = operation.replacements || [{ sourceChar: operation.sourceChar, targetChar: operation.targetChar }];
+    const replaceText = replacements
+      .map((pair) => `${characterToRequestToken(pair.sourceChar)}を${characterToRequestToken(pair.targetChar)}に置換`)
+      .join("、");
+    return `${scopePrefix}${replaceText}`;
   }
 
   if (operation.type === "range") {
@@ -1873,7 +1881,10 @@ function getOperationTargetLabel(operation) {
     return `${operation.chars.map(describeReplaceCharacter).join("と")}、先頭${operation.characterCount}桁`;
   }
   if (operation.type === "replace") {
-    return `${describeReplaceCharacter(operation.sourceChar)} から ${describeReplaceCharacter(operation.targetChar)}`;
+    const replacements = operation.replacements || [{ sourceChar: operation.sourceChar, targetChar: operation.targetChar }];
+    return replacements
+      .map((pair) => `${describeReplaceCharacter(pair.sourceChar)} から ${describeReplaceCharacter(pair.targetChar)}`)
+      .join("、");
   }
   if (operation.type === "range") {
     return operation.ranges.map((range) => `${range.startPosition}桁目から${range.characterCount}桁`).join("と");
@@ -2189,13 +2200,11 @@ function findExactSpaceTransformCommand(query) {
 
   if (!mentionsReplace) return null;
 
-  const replaceChars = findReplaceCharacters(query);
-  const sourceChar = replaceChars?.sourceChar;
-  const targetChar = replaceChars?.targetChar;
-  if (!sourceChar || !targetChar) return null;
+  const replacePairs = findReplaceCharacterPairs(query);
+  if (replacePairs.length === 0) return null;
 
-  const sourceHex = sourceChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
-  const targetHex = targetChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const replaceEditorCommand = buildReplaceEditorCommand(replacePairs, "F100");
+  const replaceLabel = describeReplacePairs(replacePairs);
   const conditions = buildTargetConditions(normalizedQuery);
   const uniqueTargets = [];
   conditions.forEach((condition) => {
@@ -2211,38 +2220,65 @@ function findExactSpaceTransformCommand(query) {
     : uniqueTargets.map((target) => `${target.codeId} は${target.label}`).join("、");
 
   return {
-    id: `df-generated-replace-${sourceHex}-with-${targetHex}-${uniqueTargets.map((target) => target.codeId).join("-")}`,
-    label: `${codeLabel} ${describeReplaceCharacter(sourceChar)}を${describeReplaceCharacter(targetChar)}に置換`,
+    id: `df-generated-replace-${replacePairs.map((pair) => `${charsToHex([pair.sourceChar])}-with-${charsToHex([pair.targetChar])}`).join("-")}-${uniqueTargets.map((target) => target.codeId).join("-")}`,
+    label: `${codeLabel} ${replaceLabel}に置換`,
     category: "登録例",
-    summary: `${codeLabel}を対象に、${describeReplaceCharacter(sourceChar)}を${describeReplaceCharacter(targetChar)}に置き換えて出力します。`,
+    summary: `${codeLabel}を対象に、${replaceLabel}に置き換えて出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromIntentConditions(query, `E402${sourceHex}${targetHex}F100`),
+    command: buildDataFormatCommandFromIntentConditions(query, replaceEditorCommand),
     notes: [
       `0 は Primary Data Format、099 は全端末、${codeNote}、9999 は全桁数を表す指定です。`,
-      `E4 は置換コマンド、02 は置換キャラクタ数、${sourceHex} は置換前の ${describeReplaceCharacter(sourceChar)}、${targetHex} は置換後の ${describeReplaceCharacter(targetChar)} です。`,
+      `${replaceEditorCommand.replace(/F100$/, "")} は ${replaceLabel}に置換する指定です。`,
       "F100 は置換完了後に全てのデータを送信する指定です。",
     ],
   };
 
 }
 
-function findReplaceCharacters(query) {
+function getReplaceTokenPattern() {
+  return "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|fnc1|fnc 1|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|gs|[!-~]";
+}
+
+function findReplaceCharacterPairs(query) {
   const normalizedCaseQuery = query
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
     .replace(/\s+/g, " ")
     .trim();
-  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|fnc1|fnc 1|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|gs|[!-~]";
-  const transformMatch = normalizedCaseQuery.match(
-    new RegExp(`(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*を\\s*(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*(?:に|へ)?\\s*(?:置換|置き換え|置き換えて|変換)`, "i")
-  );
+  const tokenPattern = getReplaceTokenPattern();
+  const pattern = new RegExp(`(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*を\\s*(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*(?:に|へ)?\\s*(?:置換|置き換え|置き換えて|変換)`, "gi");
+  const pairs = [];
+  const seen = new Set();
+  let match;
 
-  if (!transformMatch) return null;
+  while ((match = pattern.exec(normalizedCaseQuery)) !== null) {
+    const sourceChar = normalizeReplaceCharacter(match[1]);
+    const targetChar = normalizeReplaceCharacter(match[2]);
+    if (!sourceChar || !targetChar) continue;
+    const key = `${sourceChar}\u0000${targetChar}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pairs.push({ sourceChar, targetChar });
+  }
 
-  const sourceChar = normalizeReplaceCharacter(transformMatch[1]);
-  const targetChar = normalizeReplaceCharacter(transformMatch[2]);
-  if (!sourceChar || !targetChar) return null;
+  return pairs;
+}
 
-  return { sourceChar, targetChar };
+function findReplaceCharacters(query) {
+  return findReplaceCharacterPairs(query)[0] || null;
+}
+
+function buildReplaceEditorCommand(replacePairs, suffix = "F100") {
+  const pairHex = (replacePairs || [])
+    .map((pair) => `${charsToHex([pair.sourceChar])}${charsToHex([pair.targetChar])}`)
+    .join("");
+  if (!pairHex) return "";
+  return `E4${String(pairHex.length / 2).padStart(2, "0")}${pairHex}${suffix}`;
+}
+
+function describeReplacePairs(replacePairs) {
+  return (replacePairs || [])
+    .map((pair) => `${describeReplaceCharacter(pair.sourceChar)}を${describeReplaceCharacter(pair.targetChar)}`)
+    .join("、");
 }
 
 function buildReplaceThenRangeCommand(query) {
@@ -2254,7 +2290,8 @@ function buildReplaceThenRangeCommand(query) {
 
   if (!rangeMatch || !mentionsReplace || !/(出力|送信|表示|取り出|切り出|ください)/.test(normalizedQuery)) return null;
 
-  const replaceChars = findReplaceCharacters(query);
+  const replacePairs = findReplaceCharacterPairs(query);
+  const replaceChars = replacePairs[0] || null;
   const startPosition = Number(rangeMatch[1]);
   const characterCount = Number(rangeMatch[2]);
   if (
@@ -2272,8 +2309,10 @@ function buildReplaceThenRangeCommand(query) {
   const symbology = getSymbologyTarget(normalizedQuery);
   const readLengthMatch = normalizedQuery.match(/(\d{1,4})\s*桁\s*(?:読み取り|読取|バーコード|コード)/);
   const readLength = readLengthMatch ? Number(readLengthMatch[1]) : null;
-  const sourceHex = replaceChars.sourceChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
-  const targetHex = replaceChars.targetChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const sourceHex = charsToHex([replaceChars.sourceChar]);
+  const targetHex = charsToHex([replaceChars.targetChar]);
+  const replaceEditorCommand = buildReplaceEditorCommand(replacePairs, `F7F5${(startPosition - 1).toString().padStart(2, "0")}F2${String(characterCount).padStart(2, "0")}00`);
+  const replaceLabel = describeReplacePairs(replacePairs);
   const cursorMove = startPosition - 1;
   const cursorHex = cursorMove.toString().padStart(2, "0");
   const countHex = characterCount.toString().padStart(2, "0");
@@ -2287,14 +2326,14 @@ function buildReplaceThenRangeCommand(query) {
 
   return {
     id: `df-generated-replace-${sourceHex}-with-${targetHex}-${codeId}-${lengthField}-from-${cursorHex}-count-${countHex}`,
-    label: `${describeReplaceCharacter(replaceChars.sourceChar)}を${describeReplaceCharacter(replaceChars.targetChar)}に置換後 ${startPosition}桁目から${characterCount}桁を出力`,
+    label: `${replaceLabel}に置換後 ${startPosition}桁目から${characterCount}桁を出力`,
     category: "登録例",
-    summary: `${codeLabel}・${lengthLabel}を対象に、${describeReplaceCharacter(replaceChars.sourceChar)}を${describeReplaceCharacter(replaceChars.targetChar)}に置き換えてから${startPosition}桁目から${characterCount}桁のみを出力します。`,
+    summary: `${codeLabel}・${lengthLabel}を対象に、${replaceLabel}に置き換えてから${startPosition}桁目から${characterCount}桁のみを出力します。`,
     keywords: [],
-    command: buildDataFormatCommandFromIntentConditions(query, `E402${sourceHex}${targetHex}F7F5${cursorHex}F2${countHex}00`),
+    command: buildDataFormatCommandFromIntentConditions(query, replaceEditorCommand),
     notes: [
       `${codeId} は${codeLabel}を表す指定です。${lengthNote}`,
-      `E402${sourceHex}${targetHex} は ${describeReplaceCharacter(replaceChars.sourceChar)} を ${describeReplaceCharacter(replaceChars.targetChar)} に置換する指定です。`,
+      `${buildReplaceEditorCommand(replacePairs, "")} は ${replaceLabel}に置換する指定です。`,
       "F7 は置換後にカーソルを先頭へ戻す指定です。",
       `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F2${countHex}00 でそこから${characterCount}桁を送信します。`,
     ],
@@ -3819,7 +3858,7 @@ function validateGeneratedCommand(item, intentUnderstanding) {
 function getExpectedEditorCommandsForAction(action) {
   if (action.type === "prefix_key") return [`${action.command}F100`];
   if (action.type === "suffix_key") return [`F100${action.command}`];
-  if (action.type === "replace") return [`E402${action.sourceHex}${action.targetHex}`];
+  if (action.type === "replace") return [action.editorCommand || `E402${action.sourceHex}${action.targetHex}`];
   if (action.type === "delete") return [`FB${String((action.hex || "").length / 2).padStart(2, "0")}${action.hex}`];
   if (action.type === "output_from_position_to_end") {
     return [`${buildCursorMoveCommand(action.startPosition - 1)}F100`];
