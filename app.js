@@ -2045,7 +2045,7 @@ function buildPrefixValueThenFromPositionCommand(query) {
     const outputCommand = startPosition >= cursorAfterCompare ? `${moveCommand}F100` : `${buildCursorMoveCommand(startPosition - 1)}F100`;
     return `0099${target.codeId}${lengthField}${compareCommand}${outputCommand}`;
   });
-  const command = `${buildDataFormatCommandFromBlocks(blocks).replace(/\.$/, "")};DFM_EN2;DFMDEC1.`;
+  const command = buildDataFormatCommandFromBlocks(blocks);
 
   return {
     id: `df-generated-prefix-filter-from-position-${target.codeId}-${lengthField}-${prefixValues.join("-")}-${startPosition}`,
@@ -2059,7 +2059,7 @@ function buildPrefixValueThenFromPositionCommand(query) {
       `${target.codeId} は${target.label}、${lengthField} は${readLengths.length === 1 ? `${readLengths[0]}桁` : "全桁数"}を表す指定です。`,
       "FE は現在位置の文字を比較し、一致した場合だけカーソルを1桁進める指定です。",
       "比較後はカーソルを先頭へ戻さず、指定位置から読み取りデータを出力します。",
-      "DFM_EN2 は一致必須、DFMDEC1 は不一致時のエラー音OFFです。",
+      "Data Formatter On, Not Required の状態で使うと、先頭条件に一致した場合だけこのフォーマットが適用されます。",
     ],
   };
 }
@@ -4857,6 +4857,7 @@ async function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
   const removeTrailingCharactersCommand = buildRemoveTrailingCharactersCommand(question);
+  const prefixValueThenFromPositionCommand = buildPrefixValueThenFromPositionCommand(question);
   const prefixValueFilterCommand = buildPrefixValueFilterCommand(question);
   const outputControlDelayCommand = buildOutputControlDelayCommand(question);
   const repeatedSuffixControlInsertCommand = buildRepeatedSuffixControlInsertCommand(question);
@@ -4908,6 +4909,11 @@ async function answerQuestion(question) {
 
   if (removeTrailingCharactersCommand) {
     addBotResponse(originalQuestion, await commandHtml(removeTrailingCharactersCommand), { html: true });
+    return;
+  }
+
+  if (prefixValueThenFromPositionCommand) {
+    addBotResponse(originalQuestion, await commandHtml(prefixValueThenFromPositionCommand), { html: true });
     return;
   }
 
