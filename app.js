@@ -2245,7 +2245,7 @@ function findExactSpaceTransformCommand(query) {
 }
 
 function getReplaceTokenPattern() {
-  return "tab|タブ|ht|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|fnc1|fnc 1|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|gs|[!-~]";
+  return "tab|タブ|ht|cr|enter|エンター|改行|カンマ|comma|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|fnc1|fnc 1|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|gs|[!-~]";
 }
 
 function findReplaceCharacterPairs(query) {
@@ -2254,19 +2254,24 @@ function findReplaceCharacterPairs(query) {
     .replace(/\s+/g, " ")
     .trim();
   const tokenPattern = getReplaceTokenPattern();
-  const pattern = new RegExp(`(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*を\\s*(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*(?:に|へ)?\\s*(?:置換|置き換え|置き換えて|変換)`, "gi");
+  const patterns = [
+    new RegExp(`(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*を\\s*(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*(?:に|へ)?\\s*(?:置換|置き換え|置き換えて|変換)`, "gi"),
+    new RegExp(`(?:データに|データ内に|データ中に)?\\s*(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*(?:が|は)\\s*(?:あった|ある|含まれる|含んだ|入っている)?\\s*(?:場合|時|とき)\\s*(?:、|,)?\\s*(${tokenPattern})(?:文字|キャラクタ|キャラクター)?\\s*(?:に|へ)?\\s*(?:置換|置き換え|置き換えて|変換)`, "gi"),
+  ];
   const pairs = [];
   const seen = new Set();
-  let match;
 
-  while ((match = pattern.exec(normalizedCaseQuery)) !== null) {
-    const sourceChar = normalizeReplaceCharacter(match[1]);
-    const targetChar = normalizeReplaceCharacter(match[2]);
-    if (!sourceChar || !targetChar) continue;
-    const key = `${sourceChar}\u0000${targetChar}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    pairs.push({ sourceChar, targetChar });
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(normalizedCaseQuery)) !== null) {
+      const sourceChar = normalizeReplaceCharacter(match[1]);
+      const targetChar = normalizeReplaceCharacter(match[2]);
+      if (!sourceChar || !targetChar) continue;
+      const key = `${sourceChar}\u0000${targetChar}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pairs.push({ sourceChar, targetChar });
+    }
   }
 
   return pairs;
