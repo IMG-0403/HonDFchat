@@ -907,6 +907,7 @@ function buildSingleClauseCommand(clause) {
     buildReplaceThenDeleteCommand,
     buildTrimLeadingZeroesCommand,
     buildRemoveTrailingCharactersCommand,
+    buildPositionValueThenFromPositionCommand,
     buildPrefixValueThenFromPositionCommand,
     findExactSpaceTransformCommand,
     buildDeleteThenLeadingCommand,
@@ -2060,6 +2061,59 @@ function buildPrefixValueThenFromPositionCommand(query) {
       "FE は現在位置の文字を比較し、一致した場合だけカーソルを1桁進める指定です。",
       "比較後はカーソルを先頭へ戻さず、指定位置から読み取りデータを出力します。",
       "Data Formatter On, Not Required の状態で使うと、先頭条件に一致した場合だけこのフォーマットが適用されます。",
+    ],
+  };
+}
+
+function findPositionValueCondition(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  const tokenPattern = "tab|タブ|ht|cr|enter|エンター|改行|カンマ|comma|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|[!-~]";
+  const match = asciiQuery.match(new RegExp(`(\\d{1,2})\\s*桁目\\s*(?:が|は|=|:|：)\\s*(${tokenPattern})\\s*(?:の)?\\s*(?:場合|時|とき|なら)`, "i"));
+  if (!match) return null;
+
+  const position = Number(match[1]);
+  const value = normalizeReplaceCharacter(match[2]);
+  if (!Number.isInteger(position) || position < 1 || position > 99 || !value) return null;
+  return { position, value };
+}
+
+function buildPositionValueThenFromPositionCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const condition = findPositionValueCondition(query);
+  const fromMatch = normalizedQuery.match(/(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+  if (!condition || !fromMatch) return null;
+
+  const startPosition = Number(fromMatch[1]);
+  if (!Number.isInteger(startPosition) || startPosition < 1 || startPosition > 99) return null;
+
+  const compareMove = condition.position - 1;
+  const afterComparePosition = condition.position + 1;
+  const outputMove = startPosition - afterComparePosition;
+  if (compareMove < 0 || outputMove < 0) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const conditionHex = charsToHex([condition.value]);
+  const editorCommand = `${buildCursorMoveCommand(compareMove)}FE${conditionHex}${outputMove > 0 ? buildCursorMoveCommand(outputMove) : ""}F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-position-filter-from-position-${condition.position}-${conditionHex}-${startPosition}`,
+    label: `${codeLabel}・${condition.position}桁目が${describeReplaceCharacter(condition.value)}の場合 ${startPosition}桁目から出力`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、${condition.position}桁目が${describeReplaceCharacter(condition.value)}に一致した場合だけ、${startPosition}桁目から出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    skipGenerationValidation: true,
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `${buildCursorMoveCommand(compareMove)} で${condition.position}桁目へ移動し、FE${conditionHex} で ${describeReplaceCharacter(condition.value)} と比較します。`,
+      `${outputMove > 0 ? `${buildCursorMoveCommand(outputMove)} で${startPosition}桁目へ進め、` : ""}F100 でそこから末尾まで出力します。`,
+      "Data Formatter On, Not Required の状態で使うと、条件に一致した場合だけこのフォーマットが適用されます。",
     ],
   };
 }
@@ -4747,6 +4801,7 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
     buildReplaceThenDeleteCommand,
     buildTrimLeadingZeroesCommand,
     buildRemoveTrailingCharactersCommand,
+    buildPositionValueThenFromPositionCommand,
     buildPrefixValueThenFromPositionCommand,
     buildPrefixValueFilterCommand,
     buildOutputControlDelayCommand,
@@ -4857,6 +4912,7 @@ async function answerQuestion(question) {
   const replaceThenRangeCommand = buildReplaceThenRangeCommand(question);
   const trimLeadingZeroesCommand = buildTrimLeadingZeroesCommand(question);
   const removeTrailingCharactersCommand = buildRemoveTrailingCharactersCommand(question);
+  const positionValueThenFromPositionCommand = buildPositionValueThenFromPositionCommand(question);
   const prefixValueThenFromPositionCommand = buildPrefixValueThenFromPositionCommand(question);
   const prefixValueFilterCommand = buildPrefixValueFilterCommand(question);
   const outputControlDelayCommand = buildOutputControlDelayCommand(question);
@@ -4909,6 +4965,11 @@ async function answerQuestion(question) {
 
   if (removeTrailingCharactersCommand) {
     addBotResponse(originalQuestion, await commandHtml(removeTrailingCharactersCommand), { html: true });
+    return;
+  }
+
+  if (positionValueThenFromPositionCommand) {
+    addBotResponse(originalQuestion, await commandHtml(positionValueThenFromPositionCommand), { html: true });
     return;
   }
 
