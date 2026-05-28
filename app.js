@@ -904,6 +904,7 @@ function extractDataFormatBlocks(command) {
 function buildSingleClauseCommand(clause) {
   const builders = [
     buildReplaceThenRangeCommand,
+    buildReplaceThenDeleteCommand,
     buildTrimLeadingZeroesCommand,
     buildRemoveTrailingCharactersCommand,
     findExactSpaceTransformCommand,
@@ -1172,6 +1173,13 @@ function buildCommonCommandIntent(question, structured = null) {
   const b5Action = repeatedSuffixAction ? null : buildB5AppendIntentAction(question);
   if (b5Action) actions.push(b5Action);
   if (actions.length === 0 && structured?.operation) actions.push(...buildIntentActions(structured.operation));
+  if (structured?.operation?.type === "replace") {
+    const deleteChars = findDeleteTargetCharacters(question);
+    const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
+    if (mentionsDelete && deleteChars.length > 0 && !actions.some((action) => action.type === "delete")) {
+      actions.push({ type: "delete", targets: deleteChars.map(characterToRequestToken), hex: charsToHex(deleteChars) });
+    }
+  }
 
   return {
     targetConditions,
@@ -2276,6 +2284,12 @@ function buildReplaceEditorCommand(replacePairs, suffix = "F100") {
   return `E4${String(pairHex.length / 2).padStart(2, "0")}${pairHex}${suffix}`;
 }
 
+function buildDeleteEditorCommand(chars, suffix = "F100") {
+  const targetHex = charsToHex(chars || []);
+  if (!targetHex) return "";
+  return `FB${String(targetHex.length / 2).padStart(2, "0")}${targetHex}${suffix}`;
+}
+
 function describeReplacePairs(replacePairs) {
   return (replacePairs || [])
     .map((pair) => `${describeReplaceCharacter(pair.sourceChar)}を${describeReplaceCharacter(pair.targetChar)}`)
@@ -2337,6 +2351,48 @@ function buildReplaceThenRangeCommand(query) {
       `${buildReplaceEditorCommand(replacePairs, "")} は ${replaceLabel}に置換する指定です。`,
       "F7 は置換後にカーソルを先頭へ戻す指定です。",
       `F5${cursorHex} でカーソルを${cursorMove}桁移動し、F2${countHex}00 でそこから${characterCount}桁を送信します。`,
+    ],
+  };
+}
+
+function buildReplaceThenDeleteCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const replacePairs = findReplaceCharacterPairs(query);
+  const deleteChars = findDeleteTargetCharacters(query);
+  const mentionsReplace = ["置換", "置き換え", "置き換えて", "変換"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  );
+  const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) =>
+    normalizedQuery.includes(normalizeText(word))
+  );
+
+  if (replacePairs.length === 0 || deleteChars.length === 0 || !mentionsReplace || !mentionsDelete) return null;
+
+  const replaceCommand = buildReplaceEditorCommand(replacePairs, "");
+  const deleteCommand = buildDeleteEditorCommand(deleteChars, "");
+  const editorCommand = `${replaceCommand}${deleteCommand}F100`;
+  const replaceLabel = describeReplacePairs(replacePairs);
+  const deleteLabel = deleteChars.map(describeReplaceCharacter).join("と");
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-replace-delete-${replacePairs.map((pair) => `${charsToHex([pair.sourceChar])}-${charsToHex([pair.targetChar])}`).join("-")}-${charsToHex(deleteChars)}`,
+    label: `${codeLabel}・${lengthLabel} ${replaceLabel}に置換、${deleteLabel}を削除`,
+    category: "登録例",
+    summary: `${codeLabel}を対象に、${replaceLabel}に置き換え、${deleteLabel}を削除して出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `${replaceCommand} は ${replaceLabel}に置換する指定です。`,
+      `${deleteCommand} は ${deleteLabel}を削除する指定です。`,
+      "F100 は処理完了後に全てのデータを送信する指定です。",
     ],
   };
 }
@@ -4639,6 +4695,7 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
   const builders = [
     buildMultiClauseCommand,
     buildReplaceThenRangeCommand,
+    buildReplaceThenDeleteCommand,
     buildTrimLeadingZeroesCommand,
     buildRemoveTrailingCharactersCommand,
     buildPrefixValueFilterCommand,
