@@ -417,6 +417,7 @@ const b5KeyMapTable = [
   { key: "F10", hex: "79", aliases: ["ファンクション10"] },
   { key: "F11", hex: "7A", aliases: ["ファンクション11"] },
   { key: "F12", hex: "7B", aliases: ["ファンクション12"] },
+  { key: "ESC", hex: "6E", aliases: ["escape", "エスケープ", "エスケープキー"] },
   { key: "左矢印", hex: "4F", aliases: ["左矢印", "左矢印キー", "left arrow", "arrow left"] },
   { key: "右矢印", hex: "59", aliases: ["右矢印", "右矢印キー", "right arrow", "arrow right"] },
   { key: "上矢印", hex: "53", aliases: ["上矢印", "上矢印キー", "up arrow", "arrow up"] },
@@ -2236,7 +2237,7 @@ function findExactSpaceTransformCommand(query) {
 }
 
 function getReplaceTokenPattern() {
-  return "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|fnc1|fnc 1|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|gs|[!-~]";
+  return "tab|タブ|ht|スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|fnc1|fnc 1|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|gs|[!-~]";
 }
 
 function findReplaceCharacterPairs(query) {
@@ -2396,6 +2397,7 @@ function normalizeReplaceCharacter(value) {
   if (["ピリオド", "ドット", "period", "dot"].includes(lowered)) return ".";
   if (["ハイフン", "hyphen", "マイナス", "minus"].includes(lowered)) return "-";
   if (["カンマ", "comma"].includes(lowered)) return ",";
+  if (["tab", "タブ", "ht"].includes(lowered)) return "\x09";
   if (["cr", "enter", "エンター", "改行"].includes(lowered)) return "\x0D";
   if (["gs", "gsコード", "gsキャラクタ", "gsキャラクター", "fnc1", "fnc 1", "group separator", "グループセパレータ"].includes(lowered)) return "\x1D";
   if (normalized.length === 1 && normalized >= "!" && normalized <= "~") return normalized;
@@ -2408,6 +2410,7 @@ function describeReplaceCharacter(char) {
   if (char === ".") return ".(ピリオド)";
   if (char === "-") return "-(ハイフン)";
   if (char === ",") return ",(カンマ)";
+  if (char === "\x09") return "TAB";
   if (char === "\x0D") return "CR";
   if (char === "\x1D") return "GSキャラクタ";
   return char;
@@ -2985,7 +2988,19 @@ function hasPlainTextAppendTarget(query) {
   const asciiQuery = normalizeAsciiText(query);
   if (/(?:ctrl|control|コントロール|alt|shift)/i.test(asciiQuery)) return false;
   if (/(?:^|[^A-Za-z0-9])F(?:1[0-2]|[1-9])\s*(?:キー|key)/i.test(asciiQuery)) return false;
+  if (hasExplicitB5KeyAppendTarget(query)) return false;
   return /(?:先頭|データ先頭|末尾|データ末尾|プリフィックス|プレフィックス|サフィックス|prefix|suffix|\d{1,2}\s*桁目)\s*(?:設定)?\s*(?:に|へ|で)?\s*(?:文字列)?\s*[A-Za-z0-9+ ]{2,40}\s*(?:の)?\s*(?:文字列入力|文字列)?\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定|の場合)?/i.test(asciiQuery);
+}
+
+function hasExplicitB5KeyAppendTarget(query) {
+  const normalizedQuery = normalizeText(query);
+  if (/(文字列|文字入力|テキスト)/.test(normalizedQuery)) return false;
+
+  const key = findB5KeyForAppend(query);
+  if (!key) return false;
+
+  if (normalizedQuery.includes("キー") || /\bkey\b/i.test(normalizedQuery)) return true;
+  return key.key.length > 1 && normalizedQuery.includes(normalizeText(key.key));
 }
 
 function findPrefixText(query) {
