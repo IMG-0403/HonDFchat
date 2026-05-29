@@ -4795,6 +4795,14 @@ function renderAztecBarcodes(root = document) {
 }
 
 function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentUnderstanding(question)) {
+  const generated = buildGeneratedCommandCandidate(question, intentUnderstanding);
+  if (generated?.command) return generated;
+
+  const matches = findMatches(question);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function buildGeneratedCommandCandidate(question, intentUnderstanding = buildIntentUnderstanding(question)) {
   const builders = [
     buildMultiClauseCommand,
     buildReplaceThenRangeCommand,
@@ -4834,8 +4842,7 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
     if (item?.command) return item;
   }
 
-  const matches = findMatches(question);
-  return matches.length === 1 ? matches[0] : null;
+  return null;
 }
 
 async function buildFallbackGpt41Command(originalQuestion) {
@@ -4945,6 +4952,12 @@ async function answerQuestion(question) {
   if (functionKeyTextAmbiguityHtml) {
     setPendingClarification("function_key_text", question, { key: getAmbiguousFunctionKeyAppend(question) });
     addBotResponse(originalQuestion, functionKeyTextAmbiguityHtml, { html: true });
+    return;
+  }
+
+  const generatedCommand = buildGeneratedCommandCandidate(question, intentUnderstanding);
+  if (generatedCommand) {
+    addBotResponse(originalQuestion, await commandHtml(generatedCommand), { html: true });
     return;
   }
 
