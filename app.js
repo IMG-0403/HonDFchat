@@ -1977,7 +1977,7 @@ function buildLeadingCharactersCommand(query) {
 function findPrefixValueFilter(query) {
   const normalizedQuery = normalizeText(query);
   const mentionsPrefix = /(先頭文字|先頭値|先頭コード|先頭|prefix)/i.test(normalizedQuery);
-  const mentionsOnly = /(のみ|だけ|限定|一致|場合)/.test(normalizedQuery);
+  const mentionsOnly = /(のみ|だけ|限定|一致|場合|時|とき)/.test(normalizedQuery);
   const mentionsOutput = /(読取出力|読み取り出力|読み取り|読取|出力|送信|表示)/.test(normalizedQuery);
   if (!mentionsPrefix || !mentionsOnly || !mentionsOutput) return null;
 
