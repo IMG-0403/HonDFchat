@@ -4,44 +4,83 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>HON DATA FORMAT</title>
-    <link rel="stylesheet" href="styles.css?v=20260520-26" />
+    <link rel="stylesheet" href="styles.css?v=20260601-02" />
   </head>
   <body>
     <main class="app-shell">
       <aside class="sidebar" aria-label="設定カテゴリ">
-        <div class="brand">
-          <div class="scanner-mark" aria-hidden="true">
-            <span></span>
+        <div class="sidebar-content">
+          <div class="brand">
+            <div class="scanner-mark" aria-hidden="true">
+              <span></span>
+            </div>
+            <div>
+              <p class="eyebrow">HON DATA FORMAT</p>
+              <h1>データフォーマット案内</h1>
+            </div>
           </div>
-          <div>
-            <p class="eyebrow">HON DATA FORMAT</p>
-            <h1>データフォーマット案内</h1>
-          </div>
+
+          <button class="sample-prompt" type="button" data-sample-prompt="QRの10桁読み取り時、3桁目から5桁出力設定">
+            <span>サンプル例① データ抽出</span>
+            <strong>QRの10桁読み取り時、3桁目から5桁出力設定</strong>
+          </button>
+          <button class="sample-prompt" type="button" data-sample-prompt="NW-7読み取り時、先頭にABCの文字列挿入設定">
+            <span>サンプル例② キャラクタ挿入</span>
+            <strong>NW-7読み取り時、先頭にABCの文字列挿入設定</strong>
+          </button>
+          <button class="sample-prompt" type="button" data-sample-prompt="GS1-128読み取り時、GSキャラクタを#に置換出力設定">
+            <span>サンプル例③ キャラクタ置換</span>
+            <strong>GS1-128読み取り時、GSキャラクタを#に置換出力設定</strong>
+          </button>
+          <button class="sample-prompt" type="button" data-sample-prompt="Code128読み取り時、データ末尾にCTRL+ALT+F5のキー挿入設定">
+            <span>サンプル例⓸ キーストローク挿入</span>
+            <strong>Code128読み取り時、データ末尾にCTRL+ALT+F5のキー挿入設定</strong>
+          </button>
+          <button class="sample-prompt" type="button" data-sample-prompt="設定クリアして、OCRの10桁読み取り時、ハイフン削除設定とCode128読み取り時、スペースを#に置換出力設定">
+            <span>サンプル例⑤ 複数コード種設定</span>
+            <strong>設定クリアして、OCRの10桁読み取り時、ハイフン削除設定とCode128読み取り時、スペースを#に置換出力設定</strong>
+          </button>
+
+          <section class="panel">
+            <div class="quick-actions" id="quickActions"></div>
+          </section>
+
+          <button class="sample-prompt sequence-prompt" id="openSequenceBuilder" type="button">
+            <span>アウトプットシーケンス機能</span>
+            <strong>アウトプットシーケンス設定</strong>
+          </button>
         </div>
 
-        <button class="sample-prompt" type="button" data-sample-prompt="QRの10桁読み取り時、3桁目から5桁出力設定">
-          <span>サンプル例① データ抽出</span>
-          <strong>QRの10桁読み取り時、3桁目から5桁出力設定</strong>
-        </button>
-        <button class="sample-prompt" type="button" data-sample-prompt="NW-7読み取り時、先頭にABCの文字列挿入設定">
-          <span>サンプル例② キャラクタ挿入</span>
-          <strong>NW-7読み取り時、先頭にABCの文字列挿入設定</strong>
-        </button>
-        <button class="sample-prompt" type="button" data-sample-prompt="GS1-128読み取り時、GSキャラクタを#に置換出力設定">
-          <span>サンプル例③ キャラクタ置換</span>
-          <strong>GS1-128読み取り時、GSキャラクタを#に置換出力設定</strong>
-        </button>
-        <button class="sample-prompt" type="button" data-sample-prompt="Code128読み取り時、データ末尾にCTRL+ALT+F5のキー挿入設定">
-          <span>サンプル例⓸ キーストローク挿入</span>
-          <strong>Code128読み取り時、データ末尾にCTRL+ALT+F5のキー挿入設定</strong>
-        </button>
-        <button class="sample-prompt" type="button" data-sample-prompt="設定クリアして、OCRの10桁読み取り時、ハイフン削除設定とCode128読み取り時、スペースを#に置換出力設定">
-          <span>サンプル例⑤ 複数コード種設定</span>
-          <strong>設定クリアして、OCRの10桁読み取り時、ハイフン削除設定とCode128読み取り時、スペースを#に置換出力設定</strong>
-        </button>
-
-        <section class="panel">
-          <div class="quick-actions" id="quickActions"></div>
+        <section class="sequence-builder" id="outputSequenceBuilder" aria-label="アウトプットシーケンス設定">
+          <div class="sequence-builder-header">
+            <div>
+              <p class="eyebrow">OUTPUT SEQUENCE</p>
+              <h3>アウトプットシーケンス設定</h3>
+            </div>
+            <button class="sequence-toggle" id="sequenceToggle" type="button" aria-expanded="false" aria-controls="sequenceBuilderBody">
+              開く
+            </button>
+          </div>
+          <div class="sequence-builder-body" id="sequenceBuilderBody" hidden>
+            <div class="sequence-mode-row">
+              <label>
+                モード
+                <select id="sequenceMode">
+                  <option value="1">Enabled</option>
+                  <option value="2">Enabled/Required</option>
+                </select>
+              </label>
+              <label class="sequence-switch">
+                <input id="appendSequenceToDataFormat" type="checkbox" />
+                <span>データフォーマット生成時に追加</span>
+              </label>
+            </div>
+            <div class="sequence-items" id="sequenceItems"></div>
+            <div class="sequence-actions">
+              <button type="button" id="addSequenceItem">追加</button>
+              <button type="button" id="generateSequenceCommand">生成</button>
+            </div>
+          </div>
         </section>
 
       </aside>
@@ -91,6 +130,6 @@
     </template>
 
     <script src="config.js"></script>
-    <script src="app.js?v=20260521-02"></script>
+    <script src="app.js?v=20260601-03"></script>
   </body>
 </html>

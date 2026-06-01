@@ -566,10 +566,20 @@ const categoryList = document.querySelector("#categoryList");
 const template = document.querySelector("#messageTemplate");
 const samplePrompts = document.querySelectorAll ? document.querySelectorAll(".sample-prompt") : [];
 const scannerMark = document.querySelector(".scanner-mark");
+const sequenceToggle = document.querySelector("#sequenceToggle");
+const sequenceBuilderBody = document.querySelector("#sequenceBuilderBody");
+const sequenceItems = document.querySelector("#sequenceItems");
+const addSequenceItemButton = document.querySelector("#addSequenceItem");
+const generateSequenceCommandButton = document.querySelector("#generateSequenceCommand");
+const sequenceModeSelect = document.querySelector("#sequenceMode");
+const appendSequenceToDataFormatInput = document.querySelector("#appendSequenceToDataFormat");
+const openSequenceBuilderButton = document.querySelector("#openSequenceBuilder");
 let adminClickCount = 0;
 let adminClickTimer = 0;
 let pendingClarification = null;
 let isAnswering = false;
+let outputSequenceItemCount = 2;
+const appendSequenceStorageKey = "honAppendSequenceToDataFormat";
 
 function normalizeText(value) {
   return value
@@ -2020,6 +2030,55 @@ function buildPrefixValueFilterCommand(query) {
       "FE は現在位置の文字を比較し、一致した場合だけカーソルを進める指定です。",
       "F7F100 は比較後にカーソルを先頭へ戻し、読み取りデータ全体を出力します。",
       "DFM_EN2 は一致必須、DFMDEC1 は不一致時のエラー音OFFです。",
+    ],
+  };
+}
+
+function buildPrefixValueSuffixControlCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const asciiQuery = normalizeAsciiText(query);
+  const prefixValues = findPrefixValueFilter(query);
+  if (!prefixValues) return null;
+
+  const mentionsSuffix = suffixWords.some((word) => normalizedQuery.includes(normalizeText(word)));
+  const mentionsAppend = /(付加|追加|つける|付ける|挿入|設定)/.test(normalizedQuery);
+  if (!mentionsSuffix || !mentionsAppend) return null;
+
+  const suffixMatch = asciiQuery.match(/(?:末尾|最後|後ろ|サフィックス|suffix|あと|後)\s*(?:に|へ)?\s*(CRLF|CR|LF|TAB|ENTER|エンター|HT|SP|SPACE|スペース|ESC|BS|BACKSPACE)\s*(?:を)?\s*(?:付加|追加|つける|付ける|挿入|設定)?/i)
+    || asciiQuery.match(/(CRLF|CR|LF|TAB|ENTER|エンター|HT|SP|SPACE|スペース|ESC|BS|BACKSPACE)\s*(?:を)?\s*(?:末尾|最後|後ろ|サフィックス|suffix).*(?:付加|追加|つける|付ける|挿入|設定)/i);
+  const control = normalizeInsertControlToken(suffixMatch?.[1] || "");
+  if (!control) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const target = symbologyTargets.length === 1 ? symbologyTargets[0] : getSymbologyTargetLegacy(normalizedQuery);
+  if (!target || target.codeId === "99") return null;
+
+  const readLengths = getReadLengths(normalizedQuery);
+  const lengthField = readLengths.length === 1 ? String(readLengths[0]).padStart(4, "0") : "9999";
+  const insertCommand = control.hex.length === 2
+    ? `F1${control.hex}`
+    : `BA${String(control.hex.length / 2).padStart(4, "0")}${control.hex}`;
+  const blocks = prefixValues.map((value) => {
+    const compareCommand = [...value].map((char) => `FE${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`).join("");
+    const outputCommand = control.hex.length === 2 ? insertCommand : `F100${insertCommand}`;
+    return `0099${target.codeId}${lengthField}${compareCommand}F7${outputCommand}`;
+  });
+  const command = buildDataFormatCommandFromBlocks(blocks);
+
+  return {
+    id: `df-generated-prefix-filter-suffix-${target.codeId}-${lengthField}-${prefixValues.join("-")}-${control.hex}`,
+    label: `${target.label}・先頭${prefixValues.join("、")}の場合 末尾に${control.label}付加`,
+    category: "登録例",
+    summary: `${target.label}を対象に、先頭文字列が${prefixValues.join("、")}に一致するデータだけ、読み取りデータ末尾に${control.label}を付加します。`,
+    keywords: [],
+    command,
+    skipGenerationValidation: true,
+    notes: [
+      `${target.codeId} は${target.label}、${lengthField} は${readLengths.length === 1 ? `${readLengths[0]}桁` : "全桁数"}を表す指定です。`,
+      "FE は現在位置の文字を比較し、一致した場合だけカーソルを進める指定です。",
+      control.hex.length === 2
+        ? `F7${insertCommand} は比較後にカーソルを先頭へ戻し、読み取りデータ全体を出力して末尾に ${control.label} を付加する指定です。`
+        : `F7F100${insertCommand} は比較後にカーソルを先頭へ戻し、読み取りデータ全体を出力して末尾に ${control.label} を付加する指定です。`,
     ],
   };
 }
@@ -3729,6 +3788,129 @@ function findSymbologyCodes(query) {
   return matches.length > 0 ? matches : symbologyCodeTable;
 }
 
+function normalizeSequenceFixedCharacter(value) {
+  const text = normalizeAsciiText(value || "");
+  if (!text) return "";
+  const control = normalizeInsertControlToken(text);
+  if (control && control.hex.length === 2) return control.hex;
+  if (text.length !== 1 || !/^[\x20-\x7E]$/.test(text)) return "";
+  return stringToAsciiHex(text);
+}
+
+function buildOutputSequenceCommand(config) {
+  const entries = (config?.entries || []).slice(0, 5);
+  if (entries.length < 2) {
+    return {
+      validationFailed: true,
+      validationErrors: ["アウトプットシーケンスは最低2バーコードデータが必要です。"],
+    };
+  }
+
+  const errors = [];
+  const blocks = entries.map((entry, index) => {
+    const codeId = String(entry.codeId || "").toUpperCase();
+    const target = symbologyCodeTable.find((item) => item.codeId === codeId && item.codeId !== "99");
+    if (!target) errors.push(`${index + 1}バーコードデータのコード種を選択してください。`);
+
+    const rawLength = String(entry.length || "").trim();
+    const lengthNumber = rawLength ? Number(rawLength) : 9999;
+    if (!Number.isInteger(lengthNumber) || lengthNumber < 1 || lengthNumber > 9999) {
+      errors.push(`${index + 1}バーコードデータの桁数は1〜9999で入力してください。`);
+    }
+    const lengthField = String(Number.isInteger(lengthNumber) ? lengthNumber : 9999).padStart(4, "0");
+
+    const fixedValues = [entry.char1, entry.char2, entry.char3].map((value) => String(value || "").trim());
+    if (!fixedValues[0] && (fixedValues[1] || fixedValues[2])) {
+      errors.push(`${index + 1}バーコードデータは先頭固定キャラクタから連続して入力してください。`);
+    }
+    if (!fixedValues[1] && fixedValues[2]) {
+      errors.push(`${index + 1}バーコードデータは2桁目固定キャラクタから連続して入力してください。`);
+    }
+
+    const fixedHex = fixedValues
+      .filter(Boolean)
+      .map((value, charIndex) => {
+        const hex = normalizeSequenceFixedCharacter(value);
+        if (!hex) errors.push(`${index + 1}バーコードデータの${charIndex + 1}桁目固定キャラクタは1文字または対応制御名で入力してください。`);
+        return hex;
+      })
+      .join("");
+
+    return `${codeId || "00"}${lengthField}${fixedHex}FF`;
+  });
+
+  const mode = String(config?.mode || "1") === "2" ? "2" : "1";
+  if (errors.length > 0) {
+    return {
+      validationFailed: true,
+      validationErrors: errors,
+    };
+  }
+
+  return {
+    id: `output-sequence-${entries.length}`,
+    label: `アウトプットシーケンス ${entries.length}バーコード`,
+    category: "アウトプットシーケンス",
+    summary: `${entries.length}件のバーコード入力順序を設定します。`,
+    keywords: [],
+    command: `SEQBLK${blocks.join("")};SEQ_EN${mode}.`,
+    skipGenerationValidation: true,
+    notes: [
+      "SEQBLK は Code ID + Length + Character Match Sequence をバーコード数分連結します。",
+      "各バーコードデータの固定キャラクタ列末尾に FF を付加します。",
+      `SEQ_EN${mode} は Output Sequence Mode を ${mode === "2" ? "Required" : "Enabled"} に設定します。`,
+    ],
+  };
+}
+
+function isDataFormatRegistrationItem(item) {
+  if (!item || item.category === "アウトプットシーケンス") return false;
+  const command = normalizeSettingCommand(item.command || "");
+  return command.includes("DFMBK3") && !command.includes("DFMBK3?") && !command.includes("DFMBK3##");
+}
+
+function combineSettingCommands(...commands) {
+  const parts = commands
+    .map((command) => normalizeSettingCommand(String(command || "")).replace(/\.$/, ""))
+    .filter(Boolean);
+  return parts.length > 0 ? `${parts.join(";")}.` : "";
+}
+
+function shouldAppendOutputSequenceToDataFormat() {
+  return Boolean(appendSequenceToDataFormatInput?.checked);
+}
+
+function buildCurrentOutputSequenceCommand() {
+  return buildOutputSequenceCommand({
+    mode: sequenceModeSelect?.value || "1",
+    entries: getOutputSequenceFormEntries(),
+  });
+}
+
+function applyOutputSequenceAppend(item) {
+  if (!shouldAppendOutputSequenceToDataFormat() || !isDataFormatRegistrationItem(item)) return item;
+
+  const sequenceItem = buildCurrentOutputSequenceCommand();
+  if (sequenceItem.validationFailed) {
+    return {
+      validationFailed: true,
+      validationErrors: [
+        "アウトプットシーケンス追加がONですが、アウトプットシーケンス設定が未完成です。",
+        ...(sequenceItem.validationErrors || []),
+      ],
+    };
+  }
+
+  return {
+    ...item,
+    command: combineSettingCommands(item.command, sequenceItem.command),
+    notes: [
+      ...(item.notes || []),
+      "アウトプットシーケンス追加がONのため、現在のアウトプットシーケンス設定コマンドを末尾に追加しました。",
+    ],
+  };
+}
+
 function buildIcon(pathList) {
   return `
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3873,6 +4055,8 @@ function htmlToPlainText(html) {
 }
 
 function commandToHtml(item) {
+  item = applyOutputSequenceAppend(item);
+
   if (item.validationFailed) {
     return `
       <div class="command-card">
@@ -4811,6 +4995,7 @@ function buildGeneratedCommandCandidate(question, intentUnderstanding = buildInt
     buildRemoveTrailingCharactersCommand,
     buildPositionValueThenFromPositionCommand,
     buildPrefixValueThenFromPositionCommand,
+    buildPrefixValueSuffixControlCommand,
     buildPrefixValueFilterCommand,
     buildOutputControlDelayCommand,
     buildSegmentedSendInsertCommand,
@@ -4921,6 +5106,7 @@ async function answerQuestion(question) {
   const removeTrailingCharactersCommand = buildRemoveTrailingCharactersCommand(question);
   const positionValueThenFromPositionCommand = buildPositionValueThenFromPositionCommand(question);
   const prefixValueThenFromPositionCommand = buildPrefixValueThenFromPositionCommand(question);
+  const prefixValueSuffixControlCommand = buildPrefixValueSuffixControlCommand(question);
   const prefixValueFilterCommand = buildPrefixValueFilterCommand(question);
   const outputControlDelayCommand = buildOutputControlDelayCommand(question);
   const repeatedSuffixControlInsertCommand = buildRepeatedSuffixControlInsertCommand(question);
@@ -4988,6 +5174,11 @@ async function answerQuestion(question) {
 
   if (prefixValueThenFromPositionCommand) {
     addBotResponse(originalQuestion, await commandHtml(prefixValueThenFromPositionCommand), { html: true });
+    return;
+  }
+
+  if (prefixValueSuffixControlCommand) {
+    addBotResponse(originalQuestion, await commandHtml(prefixValueSuffixControlCommand), { html: true });
     return;
   }
 
@@ -5177,6 +5368,90 @@ function submitCommandItem(item) {
   }, 180);
 }
 
+function getOutputSequenceFormEntries() {
+  if (!sequenceItems) return [];
+  return [...sequenceItems.querySelectorAll(".sequence-item")].map((item) => ({
+    codeId: item.querySelector("[data-sequence-field='codeId']")?.value || "",
+    length: item.querySelector("[data-sequence-field='length']")?.value || "",
+    char1: item.querySelector("[data-sequence-field='char1']")?.value || "",
+    char2: item.querySelector("[data-sequence-field='char2']")?.value || "",
+    char3: item.querySelector("[data-sequence-field='char3']")?.value || "",
+  }));
+}
+
+function renderOutputSequenceBuilder() {
+  if (!sequenceItems) return;
+
+  const currentEntries = getOutputSequenceFormEntries();
+  sequenceItems.textContent = "";
+  const count = Math.min(5, Math.max(2, outputSequenceItemCount));
+  const options = symbologyCodeTable
+    .filter((item) => item.codeId !== "99")
+    .map((item) => `<option value="${escapeHtml(item.codeId)}">${escapeHtml(item.label)} (${escapeHtml(item.codeId)})</option>`)
+    .join("");
+
+  for (let index = 0; index < count; index += 1) {
+    const values = currentEntries[index] || {};
+    const block = document.createElement("section");
+    block.className = "sequence-item";
+    block.innerHTML = `
+      <div class="sequence-item-header">
+        <span>${index + 1}バーコードデータ</span>
+        ${index >= 2 ? `<button class="sequence-remove" type="button" data-remove-sequence="${index}" aria-label="${index + 1}バーコードデータを削除">削除</button>` : ""}
+      </div>
+      <div class="sequence-grid">
+        <label class="sequence-field">
+          コード種
+          <select data-sequence-field="codeId">${options}</select>
+        </label>
+        <label class="sequence-field">
+          桁数
+          <input data-sequence-field="length" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="9999" />
+        </label>
+        <label class="sequence-field">
+          先頭固定
+          <input data-sequence-field="char1" maxlength="10" />
+        </label>
+        <label class="sequence-field">
+          2桁目固定
+          <input data-sequence-field="char2" maxlength="10" />
+        </label>
+        <label class="sequence-field">
+          3桁目固定
+          <input data-sequence-field="char3" maxlength="10" />
+        </label>
+      </div>
+    `;
+    block.querySelector("[data-sequence-field='codeId']").value = values.codeId || (index === 0 ? "62" : "6A");
+    block.querySelector("[data-sequence-field='length']").value = values.length || "";
+    block.querySelector("[data-sequence-field='char1']").value = values.char1 || "";
+    block.querySelector("[data-sequence-field='char2']").value = values.char2 || "";
+    block.querySelector("[data-sequence-field='char3']").value = values.char3 || "";
+    sequenceItems.append(block);
+  }
+
+  if (addSequenceItemButton) addSequenceItemButton.disabled = count >= 5;
+}
+
+function submitOutputSequenceForm() {
+  const item = buildOutputSequenceCommand({
+    mode: sequenceModeSelect?.value || "1",
+    entries: getOutputSequenceFormEntries(),
+  });
+
+  addMessage("user", "アウトプットシーケンス設定");
+  addBotResponse("アウトプットシーケンス設定", commandToHtml(item), { html: true });
+}
+
+function openOutputSequenceBuilder() {
+  if (sequenceToggle) {
+    sequenceToggle.setAttribute("aria-expanded", "true");
+    sequenceToggle.textContent = "閉じる";
+  }
+  if (sequenceBuilderBody) sequenceBuilderBody.hidden = false;
+  document.querySelector("#outputSequenceBuilder")?.scrollIntoView({ block: "nearest" });
+}
+
 function openPdf(path) {
   window.open(path, "_blank", "noopener");
 }
@@ -5198,26 +5473,38 @@ function renderQuickActions() {
       summary: "Data Formatの機能説明をPDFで表示します。",
       path: "HonDataFormat.pdf",
     },
+    {
+      type: "sequence",
+      label: "アウトプットシーケンス設定",
+      summary: "入力順序設定とData Format生成時の追加設定を開きます。",
+    },
     { type: "command", item: commandCatalog.find((item) => item.id === "df-clear-all") },
   ];
 
   quickItems
-    .filter((entry) => entry.type === "pdf" || entry.item)
+    .filter((entry) => entry.type === "pdf" || entry.type === "sequence" || entry.item)
     .forEach((entry) => {
       const item = entry.item;
+      const label = entry.type === "pdf" || entry.type === "sequence" ? entry.label : item.label;
+      const summary = entry.type === "pdf" || entry.type === "sequence" ? entry.summary : item.summary;
+      const icon = entry.type === "pdf" || entry.type === "sequence" ? icons.scan : iconForCategory(item.category);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "quick-action";
       button.innerHTML = `
-        <span class="quick-icon">${entry.type === "pdf" ? icons.scan : iconForCategory(item.category)}</span>
+        <span class="quick-icon">${icon}</span>
         <span>
-          <strong>${escapeHtml(entry.type === "pdf" ? entry.label : item.label)}</strong>
-          <span>${escapeHtml(entry.type === "pdf" ? entry.summary : item.summary)}</span>
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(summary)}</span>
         </span>
       `;
       button.addEventListener("click", () => {
         if (entry.type === "pdf") {
           openPdf(entry.path);
+          return;
+        }
+        if (entry.type === "sequence") {
+          openOutputSequenceBuilder();
           return;
         }
         submitCommandItem(item);
@@ -5264,6 +5551,52 @@ samplePrompts.forEach((button) => {
   });
 });
 
+openSequenceBuilderButton?.addEventListener("click", () => {
+  openOutputSequenceBuilder();
+});
+
+sequenceToggle?.addEventListener("click", () => {
+  const expanded = sequenceToggle.getAttribute("aria-expanded") === "true";
+  sequenceToggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+  sequenceToggle.textContent = expanded ? "開く" : "閉じる";
+  if (sequenceBuilderBody) sequenceBuilderBody.hidden = expanded;
+});
+
+addSequenceItemButton?.addEventListener("click", () => {
+  outputSequenceItemCount = Math.min(5, outputSequenceItemCount + 1);
+  renderOutputSequenceBuilder();
+});
+
+sequenceItems?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-sequence]");
+  if (!button) return;
+  const removeIndex = Number(button.dataset.removeSequence);
+  const entries = getOutputSequenceFormEntries().filter((_, index) => index !== removeIndex);
+  outputSequenceItemCount = Math.max(2, entries.length);
+  renderOutputSequenceBuilder();
+  entries.forEach((entry, index) => {
+    const block = sequenceItems.querySelectorAll(".sequence-item")[index];
+    if (!block) return;
+    block.querySelector("[data-sequence-field='codeId']").value = entry.codeId;
+    block.querySelector("[data-sequence-field='length']").value = entry.length;
+    block.querySelector("[data-sequence-field='char1']").value = entry.char1;
+    block.querySelector("[data-sequence-field='char2']").value = entry.char2;
+    block.querySelector("[data-sequence-field='char3']").value = entry.char3;
+  });
+});
+
+generateSequenceCommandButton?.addEventListener("click", () => {
+  submitOutputSequenceForm();
+});
+
+appendSequenceToDataFormatInput?.addEventListener("change", () => {
+  try {
+    localStorage.setItem(appendSequenceStorageKey, appendSequenceToDataFormatInput.checked ? "1" : "0");
+  } catch (_error) {
+    // 保存できない場合も現在のスイッチ状態だけで動作します。
+  }
+});
+
 scannerMark?.addEventListener("click", () => {
   window.clearTimeout(adminClickTimer);
   adminClickCount += 1;
@@ -5282,8 +5615,17 @@ if (document.body.classList.contains("mobile-page")) {
   }, 250);
 }
 
+if (appendSequenceToDataFormatInput) {
+  try {
+    appendSequenceToDataFormatInput.checked = localStorage.getItem(appendSequenceStorageKey) === "1";
+  } catch (_error) {
+    appendSequenceToDataFormatInput.checked = false;
+  }
+}
+
 renderQuickActions();
 renderCategories();
+renderOutputSequenceBuilder();
 loadAdminCommandCatalog().finally(() => addMessage("bot", welcomeText));
 
 async function copyToClipboard(value) {

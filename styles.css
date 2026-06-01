@@ -38,7 +38,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -76,6 +77,15 @@ input:disabled {
   min-height: 0;
   padding: 20px;
   border-radius: 8px;
+  overflow: hidden;
+}
+
+.sidebar-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -344,6 +354,178 @@ h2 {
   min-height: 0;
   padding: 20px;
   overflow: auto;
+}
+
+.sequence-builder {
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.sidebar .sequence-builder {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.sequence-builder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+}
+
+.sidebar .sequence-builder-header {
+  padding: 12px;
+}
+
+.sequence-builder h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.sequence-toggle,
+.sequence-actions button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+
+.sequence-toggle:hover,
+.sequence-toggle:focus-visible,
+.sequence-actions button:hover,
+.sequence-actions button:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.sequence-builder-body {
+  display: grid;
+  gap: 12px;
+  max-height: min(48vh, 460px);
+  padding: 0 20px 16px;
+  overflow: auto;
+}
+
+.sidebar .sequence-builder-body {
+  max-height: none;
+  padding: 0 12px 12px;
+}
+
+.sequence-mode-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) minmax(220px, max-content);
+  gap: 12px;
+  align-items: end;
+}
+
+.sidebar .sequence-mode-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sequence-mode-row label,
+.sequence-field {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.sequence-mode-row select,
+.sequence-field input,
+.sequence-field select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+}
+
+.sequence-mode-row select:focus,
+.sequence-field input:focus,
+.sequence-field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.sequence-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.sequence-switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.sequence-items {
+  display: grid;
+  gap: 10px;
+}
+
+.sequence-item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.sequence-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.sequence-remove {
+  min-width: 36px;
+  min-height: 32px;
+  border: 1px solid rgba(155, 77, 18, 0.32);
+  border-radius: 8px;
+  background: #fff8f1;
+  color: var(--warning);
+  font-weight: 800;
+}
+
+.sequence-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.4fr) minmax(90px, 0.7fr) repeat(3, minmax(92px, 0.7fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.sidebar .sequence-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sequence-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .message {
@@ -1079,6 +1261,10 @@ h2 {
     max-width: 100%;
   }
 
+  .sequence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .mobile-link {
     display: none;
   }
@@ -1103,6 +1289,19 @@ h2 {
 
   .chat-header h2 {
     font-size: 1rem;
+  }
+
+  .sequence-builder-header {
+    align-items: flex-start;
+  }
+
+  .sequence-builder-body {
+    padding: 0 12px 12px;
+  }
+
+  .sequence-grid,
+  .sequence-mode-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .composer {
