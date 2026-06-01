@@ -5446,6 +5446,7 @@ function submitOutputSequenceForm() {
 function clearOutputSequenceForm() {
   outputSequenceItemCount = 2;
   if (sequenceModeSelect) sequenceModeSelect.value = "1";
+  if (sequenceItems) sequenceItems.textContent = "";
   renderOutputSequenceBuilder();
 }
 
