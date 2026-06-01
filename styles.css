@@ -77,16 +77,13 @@ input:disabled {
   min-height: 0;
   padding: 20px;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .sidebar-content {
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
   gap: 18px;
-  min-height: 0;
-  overflow: auto;
 }
 
 .brand {
@@ -362,7 +359,6 @@ h2 {
 }
 
 .sidebar .sequence-builder {
-  flex: 0 0 auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);

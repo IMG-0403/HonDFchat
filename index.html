@@ -44,44 +44,38 @@
           <section class="panel">
             <div class="quick-actions" id="quickActions"></div>
           </section>
-
-          <button class="sample-prompt sequence-prompt" id="openSequenceBuilder" type="button">
-            <span>アウトプットシーケンス機能</span>
-            <strong>アウトプットシーケンス設定</strong>
-          </button>
+          <section class="sequence-builder" id="outputSequenceBuilder" aria-label="アウトプットシーケンス設定">
+            <div class="sequence-builder-header">
+              <div>
+                <p class="eyebrow">OUTPUT SEQUENCE</p>
+                <h3>アウトプットシーケンス設定</h3>
+              </div>
+              <button class="sequence-toggle" id="sequenceToggle" type="button" aria-expanded="false" aria-controls="sequenceBuilderBody">
+                開く
+              </button>
+            </div>
+            <div class="sequence-builder-body" id="sequenceBuilderBody" hidden>
+              <div class="sequence-mode-row">
+                <label>
+                  モード
+                  <select id="sequenceMode">
+                    <option value="1">Enabled</option>
+                    <option value="2">Enabled/Required</option>
+                  </select>
+                </label>
+                <label class="sequence-switch">
+                  <input id="appendSequenceToDataFormat" type="checkbox" />
+                  <span>データフォーマット生成時に追加</span>
+                </label>
+              </div>
+              <div class="sequence-items" id="sequenceItems"></div>
+              <div class="sequence-actions">
+                <button type="button" id="addSequenceItem">追加</button>
+                <button type="button" id="generateSequenceCommand">生成</button>
+              </div>
+            </div>
+          </section>
         </div>
-
-        <section class="sequence-builder" id="outputSequenceBuilder" aria-label="アウトプットシーケンス設定">
-          <div class="sequence-builder-header">
-            <div>
-              <p class="eyebrow">OUTPUT SEQUENCE</p>
-              <h3>アウトプットシーケンス設定</h3>
-            </div>
-            <button class="sequence-toggle" id="sequenceToggle" type="button" aria-expanded="false" aria-controls="sequenceBuilderBody">
-              開く
-            </button>
-          </div>
-          <div class="sequence-builder-body" id="sequenceBuilderBody" hidden>
-            <div class="sequence-mode-row">
-              <label>
-                モード
-                <select id="sequenceMode">
-                  <option value="1">Enabled</option>
-                  <option value="2">Enabled/Required</option>
-                </select>
-              </label>
-              <label class="sequence-switch">
-                <input id="appendSequenceToDataFormat" type="checkbox" />
-                <span>データフォーマット生成時に追加</span>
-              </label>
-            </div>
-            <div class="sequence-items" id="sequenceItems"></div>
-            <div class="sequence-actions">
-              <button type="button" id="addSequenceItem">追加</button>
-              <button type="button" id="generateSequenceCommand">生成</button>
-            </div>
-          </div>
-        </section>
 
       </aside>
 
@@ -130,6 +124,6 @@
     </template>
 
     <script src="config.js"></script>
-    <script src="app.js?v=20260601-03"></script>
+    <script src="app.js?v=20260601-04"></script>
   </body>
 </html>

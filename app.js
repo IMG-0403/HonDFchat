@@ -573,7 +573,6 @@ const addSequenceItemButton = document.querySelector("#addSequenceItem");
 const generateSequenceCommandButton = document.querySelector("#generateSequenceCommand");
 const sequenceModeSelect = document.querySelector("#sequenceMode");
 const appendSequenceToDataFormatInput = document.querySelector("#appendSequenceToDataFormat");
-const openSequenceBuilderButton = document.querySelector("#openSequenceBuilder");
 let adminClickCount = 0;
 let adminClickTimer = 0;
 let pendingClarification = null;
@@ -5473,21 +5472,16 @@ function renderQuickActions() {
       summary: "Data Formatの機能説明をPDFで表示します。",
       path: "HonDataFormat.pdf",
     },
-    {
-      type: "sequence",
-      label: "アウトプットシーケンス設定",
-      summary: "入力順序設定とData Format生成時の追加設定を開きます。",
-    },
     { type: "command", item: commandCatalog.find((item) => item.id === "df-clear-all") },
   ];
 
   quickItems
-    .filter((entry) => entry.type === "pdf" || entry.type === "sequence" || entry.item)
+    .filter((entry) => entry.type === "pdf" || entry.item)
     .forEach((entry) => {
       const item = entry.item;
-      const label = entry.type === "pdf" || entry.type === "sequence" ? entry.label : item.label;
-      const summary = entry.type === "pdf" || entry.type === "sequence" ? entry.summary : item.summary;
-      const icon = entry.type === "pdf" || entry.type === "sequence" ? icons.scan : iconForCategory(item.category);
+      const label = entry.type === "pdf" ? entry.label : item.label;
+      const summary = entry.type === "pdf" ? entry.summary : item.summary;
+      const icon = entry.type === "pdf" ? icons.scan : iconForCategory(item.category);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "quick-action";
@@ -5501,10 +5495,6 @@ function renderQuickActions() {
       button.addEventListener("click", () => {
         if (entry.type === "pdf") {
           openPdf(entry.path);
-          return;
-        }
-        if (entry.type === "sequence") {
-          openOutputSequenceBuilder();
           return;
         }
         submitCommandItem(item);
@@ -5549,10 +5539,6 @@ samplePrompts.forEach((button) => {
   button.addEventListener("click", () => {
     submitQuestion(button.dataset.samplePrompt || "");
   });
-});
-
-openSequenceBuilderButton?.addEventListener("click", () => {
-  openOutputSequenceBuilder();
 });
 
 sequenceToggle?.addEventListener("click", () => {
