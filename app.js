@@ -569,6 +569,7 @@ const scannerMark = document.querySelector(".scanner-mark");
 const sequenceToggle = document.querySelector("#sequenceToggle");
 const sequenceBuilderBody = document.querySelector("#sequenceBuilderBody");
 const sequenceItems = document.querySelector("#sequenceItems");
+const clearSequenceItemsButton = document.querySelector("#clearSequenceItems");
 const addSequenceItemButton = document.querySelector("#addSequenceItem");
 const generateSequenceCommandButton = document.querySelector("#generateSequenceCommand");
 const sequenceModeSelect = document.querySelector("#sequenceMode");
@@ -5442,6 +5443,12 @@ function submitOutputSequenceForm() {
   addBotResponse("アウトプットシーケンス設定", commandToHtml(item), { html: true });
 }
 
+function clearOutputSequenceForm() {
+  outputSequenceItemCount = 2;
+  if (sequenceModeSelect) sequenceModeSelect.value = "1";
+  renderOutputSequenceBuilder();
+}
+
 function openOutputSequenceBuilder() {
   if (sequenceToggle) {
     sequenceToggle.setAttribute("aria-expanded", "true");
@@ -5551,6 +5558,10 @@ sequenceToggle?.addEventListener("click", () => {
 addSequenceItemButton?.addEventListener("click", () => {
   outputSequenceItemCount = Math.min(5, outputSequenceItemCount + 1);
   renderOutputSequenceBuilder();
+});
+
+clearSequenceItemsButton?.addEventListener("click", () => {
+  clearOutputSequenceForm();
 });
 
 sequenceItems?.addEventListener("click", (event) => {
