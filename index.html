@@ -135,16 +135,19 @@
             </div>
             <div class="sequence-builder-body" id="sequenceBuilderBody" hidden>
               <div class="sequence-mode-row">
-                <label>
-                  モード
-                  <select id="sequenceMode">
-                    <option value="1">Enabled</option>
-                    <option value="2">Enabled/Required</option>
-                  </select>
-                </label>
                 <label class="sequence-switch data-format-append-switch">
                   <input id="appendSequenceToDataFormat" type="checkbox" />
                   <span>データフォーマット生成時に追加</span>
+                </label>
+              </div>
+              <div class="sequence-mode-row">
+                <label>
+                  アウトプットシーケンスモード設定
+                  <select id="sequenceMode">
+                    <option value="0">無効</option>
+                    <option value="1">有効、要求しない</option>
+                    <option value="2">有効、要求する</option>
+                  </select>
                 </label>
               </div>
               <div class="sequence-items" id="sequenceItems"></div>

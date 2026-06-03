@@ -704,6 +704,11 @@ h2 {
   font-weight: 800;
 }
 
+.sequence-default-switch {
+  margin-left: auto;
+  font-size: 0.74rem;
+}
+
 .sequence-remove {
   min-width: 36px;
   min-height: 32px;

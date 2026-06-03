@@ -1271,7 +1271,7 @@ let isAnswering = false;
 let outputSequenceItemCount = 2;
 const appendSequenceStorageKey = "honAppendSequenceToDataFormat";
 const symbolDefaultCommand =
-  "CBRDFT;C39DFT;I25DFT;N25DFT;C93DFT;R25DFT;A25DFT;X25DFT;C11DFT;128DFT;GS1DFT;TELDFT;UPADFT;UPEDFT;E13DFT;EA8DFT;MSIDFT;RSSDFT;RSLDFT;RSEDFT;CBADFT;CBFDFT;PDFDFT;MPDDFT;QRCDFT;DOTDFT;IDMDFT;MAXDFT;AZTDFT;HX_DFT;POSTAL0;CPCDFT;KPCDFT.";
+  "CBRDFT;C39DFT;I25DFT;N25DFT;C93DFT;R25DFT;A25DFT;X25DFT;C11DFT;128DFT;GS1DFT;TELDFT;UPADFT;UPEDFT;E13DFT;EA8DFT;MSIDFT;RSSDFT;RSLDFT;RSEDFT;CBADFT;CBFDFT;PDFDFT;MPDDFT;QRCDFT;DOTDFT;IDMDFT;MAXDFT;AZTDFT;HX_DFT;POSTAL0;CPCDFT;KPCDFT;LBLENA0;TRIENA0;GMXENA0;T39ENA0.";
 
 function normalizeText(value) {
   return value
@@ -4512,6 +4512,7 @@ function normalizeSequenceFixedCharacter(value) {
 
 function buildOutputSequenceCommand(config) {
   const entries = (config?.entries || []).slice(0, 5);
+  const addDefaultCommand = Boolean(entries[0]?.resetDefault);
   if (entries.length < 2) {
     return {
       validationFailed: true,
@@ -4522,7 +4523,7 @@ function buildOutputSequenceCommand(config) {
   const errors = [];
   const blocks = entries.map((entry, index) => {
     const codeId = String(entry.codeId || "").toUpperCase();
-    const target = symbologyCodeTable.find((item) => item.codeId === codeId && item.codeId !== "99");
+    const target = symbologyCodeTable.find((item) => item.codeId === codeId);
     if (!target) errors.push(`${index + 1}バーコードデータのコード種を選択してください。`);
 
     const rawLength = String(entry.length || "").trim();
@@ -4552,7 +4553,12 @@ function buildOutputSequenceCommand(config) {
     return `${codeId || "00"}${lengthField}${fixedHex}FF`;
   });
 
-  const mode = String(config?.mode || "1") === "2" ? "2" : "1";
+  const mode = ["0", "1", "2"].includes(String(config?.mode)) ? String(config.mode) : "0";
+  const modeLabels = {
+    0: "無効",
+    1: "有効、要求しない",
+    2: "有効、要求する",
+  };
   if (errors.length > 0) {
     return {
       validationFailed: true,
@@ -4566,12 +4572,13 @@ function buildOutputSequenceCommand(config) {
     category: "アウトプットシーケンス",
     summary: `${entries.length}件のバーコード入力順序を設定します。`,
     keywords: [],
-    command: `SEQBLK${blocks.join("")};SEQ_EN${mode}.`,
+    command: `${addDefaultCommand ? "SEQDFT;" : ""}SEQBLK${blocks.join("")};SEQ_EN${mode}.`,
     skipGenerationValidation: true,
     notes: [
+      ...(addDefaultCommand ? ["SEQDFT; を先頭に付加して、アウトプットシーケンス設定を初期化してから設定します。"] : []),
       "SEQBLK は Code ID + Length + Character Match Sequence をバーコード数分連結します。",
       "各バーコードデータの固定キャラクタ列末尾に FF を付加します。",
-      `SEQ_EN${mode} は Output Sequence Mode を ${mode === "2" ? "Required" : "Enabled"} に設定します。`,
+      `SEQ_EN${mode} はアウトプットシーケンスモードを「${modeLabels[mode]}」に設定します。`,
     ],
   };
 }
@@ -4599,7 +4606,7 @@ function shouldAppendSymbolsToDataFormat() {
 
 function buildCurrentOutputSequenceCommand() {
   return buildOutputSequenceCommand({
-    mode: sequenceModeSelect?.value || "1",
+    mode: sequenceModeSelect?.value || "0",
     entries: getOutputSequenceFormEntries(),
   });
 }
@@ -6192,6 +6199,7 @@ function submitCommandItem(item) {
 function getOutputSequenceFormEntries() {
   if (!sequenceItems) return [];
   return [...sequenceItems.querySelectorAll(".sequence-item")].map((item) => ({
+    resetDefault: item.querySelector("[data-sequence-field='resetDefault']")?.checked || false,
     codeId: item.querySelector("[data-sequence-field='codeId']")?.value || "",
     length: item.querySelector("[data-sequence-field='length']")?.value || "",
     char1: item.querySelector("[data-sequence-field='char1']")?.value || "",
@@ -6386,7 +6394,6 @@ function renderOutputSequenceBuilder() {
   sequenceItems.textContent = "";
   const count = Math.min(5, Math.max(2, outputSequenceItemCount));
   const options = symbologyCodeTable
-    .filter((item) => item.codeId !== "99")
     .map((item) => `<option value="${escapeHtml(item.codeId)}">${escapeHtml(item.label)} (${escapeHtml(item.codeId)})</option>`)
     .join("");
 
@@ -6397,6 +6404,10 @@ function renderOutputSequenceBuilder() {
     block.innerHTML = `
       <div class="sequence-item-header">
         <span>${index + 1}バーコードデータ</span>
+        ${index === 0 ? `<label class="sequence-switch sequence-default-switch">
+          <input data-sequence-field="resetDefault" type="checkbox" ${values.resetDefault ? "checked" : ""} />
+          <span>初期設定付加</span>
+        </label>` : ""}
         ${index >= 2 ? `<button class="sequence-remove" type="button" data-remove-sequence="${index}" aria-label="${index + 1}バーコードデータを削除">削除</button>` : ""}
       </div>
       <div class="sequence-grid">
@@ -6422,7 +6433,9 @@ function renderOutputSequenceBuilder() {
         </label>
       </div>
     `;
-    block.querySelector("[data-sequence-field='codeId']").value = values.codeId || (index === 0 ? "62" : "6A");
+    block.querySelector("[data-sequence-field='codeId']").value = values.codeId || "99";
+    const resetDefaultInput = block.querySelector("[data-sequence-field='resetDefault']");
+    if (resetDefaultInput) resetDefaultInput.checked = Boolean(values.resetDefault);
     block.querySelector("[data-sequence-field='length']").value = values.length || "";
     block.querySelector("[data-sequence-field='char1']").value = values.char1 || "";
     block.querySelector("[data-sequence-field='char2']").value = values.char2 || "";
@@ -6435,7 +6448,7 @@ function renderOutputSequenceBuilder() {
 
 function submitOutputSequenceForm() {
   const item = buildOutputSequenceCommand({
-    mode: sequenceModeSelect?.value || "1",
+    mode: sequenceModeSelect?.value || "0",
     entries: getOutputSequenceFormEntries(),
   });
 
@@ -6445,7 +6458,7 @@ function submitOutputSequenceForm() {
 
 function clearOutputSequenceForm() {
   outputSequenceItemCount = 2;
-  if (sequenceModeSelect) sequenceModeSelect.value = "1";
+  if (sequenceModeSelect) sequenceModeSelect.value = "0";
   if (appendSequenceToDataFormatInput) {
     appendSequenceToDataFormatInput.checked = false;
     try {
@@ -6624,6 +6637,8 @@ sequenceItems?.addEventListener("click", (event) => {
   entries.forEach((entry, index) => {
     const block = sequenceItems.querySelectorAll(".sequence-item")[index];
     if (!block) return;
+    const resetDefaultInput = block.querySelector("[data-sequence-field='resetDefault']");
+    if (resetDefaultInput) resetDefaultInput.checked = Boolean(entry.resetDefault);
     block.querySelector("[data-sequence-field='codeId']").value = entry.codeId;
     block.querySelector("[data-sequence-field='length']").value = entry.length;
     block.querySelector("[data-sequence-field='char1']").value = entry.char1;
