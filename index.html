@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>HON DATA FORMAT</title>
-    <link rel="stylesheet" href="styles.css?v=20260601-02" />
+    <link rel="stylesheet" href="styles.css?v=20260601-03" />
   </head>
   <body>
     <main class="app-shell">
@@ -19,6 +19,48 @@
               <h1>データフォーマット案内</h1>
             </div>
           </div>
+
+          <section class="sequence-builder" id="dataFormatSettingsBuilder" aria-label="データフォーマットオプション設定">
+            <div class="sequence-builder-header">
+              <div>
+                <p class="eyebrow">DATA FORMAT</p>
+                <h3>データフォーマットオプション設定</h3>
+              </div>
+              <button class="sequence-toggle" id="dataFormatSettingsToggle" type="button" aria-expanded="false" aria-controls="dataFormatSettingsBody">
+                開く
+              </button>
+            </div>
+            <div class="sequence-builder-body" id="dataFormatSettingsBody" hidden>
+              <div class="sequence-mode-row">
+                <label>
+                  データフォーマット初期設定
+                  <select id="dataFormatDefaultMode">
+                    <option value="off">OFF</option>
+                    <option value="on">ON</option>
+                  </select>
+                </label>
+                <label>
+                  Data Formatter
+                  <select id="dataFormatterMode">
+                    <option value="DFM_EN1">Not Required Keep Pre/Suf</option>
+                    <option value="DFM_EN2">Required Keep Pre/Suf</option>
+                    <option value="DFM_EN3">Not Required Drop Pre/Suf</option>
+                    <option value="DFM_EN4">Required Drop Pre/Suf</option>
+                  </select>
+                </label>
+                <label>
+                  Match Error Tone
+                  <select id="dataFormatErrorTone">
+                    <option value="DFMDEC0">Error Tone On</option>
+                    <option value="DFMDEC1">Error Tone Off</option>
+                  </select>
+                </label>
+              </div>
+              <div class="sequence-actions">
+                <button type="button" id="resetDataFormatSettings">初期値</button>
+              </div>
+            </div>
+          </section>
 
           <button class="sample-prompt" type="button" data-sample-prompt="QRの10桁読み取り時、3桁目から5桁出力設定">
             <span>サンプル例① データ抽出</span>
@@ -44,6 +86,43 @@
           <section class="panel">
             <div class="quick-actions" id="quickActions"></div>
           </section>
+          <section class="sequence-builder" id="symbolSettingsBuilder" aria-label="シンボル設定">
+            <div class="sequence-builder-header">
+              <div>
+                <p class="eyebrow">SYMBOL</p>
+                <h3>シンボル設定</h3>
+              </div>
+              <button class="sequence-toggle" id="symbolSettingsToggle" type="button" aria-expanded="false" aria-controls="symbolSettingsBody">
+                開く
+              </button>
+            </div>
+            <div class="sequence-builder-body" id="symbolSettingsBody" hidden>
+              <div class="sequence-mode-row">
+                <label class="sequence-switch symbol-append-switch">
+                  <input id="appendSymbolsToDataFormat" type="checkbox" />
+                  <span>データフォーマット生成時に追加</span>
+                </label>
+              </div>
+              <div class="symbol-settings-header">
+                <span>シンボル種</span>
+                <span class="symbol-enable-header">
+                  <label class="symbol-disable-all">
+                    <input id="disableAllSymbols" type="checkbox" />
+                    <span>全無効</span>
+                  </label>
+                  有効/無効
+                </span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+              </div>
+              <div class="symbol-settings-list" id="symbolSettingsRows"></div>
+              <div class="sequence-actions">
+                <button type="button" id="generateSymbolDefaultCommand">初期値バー</button>
+                <button type="button" id="resetSymbolSettings">初期値</button>
+                <button type="button" id="generateSymbolSettings">生成</button>
+              </div>
+            </div>
+          </section>
           <section class="sequence-builder" id="outputSequenceBuilder" aria-label="アウトプットシーケンス設定">
             <div class="sequence-builder-header">
               <div>
@@ -63,7 +142,7 @@
                     <option value="2">Enabled/Required</option>
                   </select>
                 </label>
-                <label class="sequence-switch">
+                <label class="sequence-switch data-format-append-switch">
                   <input id="appendSequenceToDataFormat" type="checkbox" />
                   <span>データフォーマット生成時に追加</span>
                 </label>
@@ -125,6 +204,6 @@
     </template>
 
     <script src="config.js"></script>
-    <script src="app.js?v=20260601-04"></script>
+    <script src="app.js?v=20260601-05"></script>
   </body>
 </html>

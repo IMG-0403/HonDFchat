@@ -499,6 +499,579 @@ const symbologyCodeTable = [
   { codeId: "50", label: "Postnet", aliases: ["postnet"] },
 ];
 
+const symbolSettingsCommandTable = [
+  { codeId: "7A", label: "Aztec Code", enableCmd: "AZTENA", minCmd: "AZTMIN", maxCmd: "AZTMAX", min: 1, max: 3832, defaultEnabled: "1", defaultMin: 1, defaultMax: 3832 },
+  {
+    codeId: "61",
+    label: "Codabar/NW-7",
+    enableCmd: "CBRENA",
+    minCmd: "CBRMIN",
+    maxCmd: "CBRMAX",
+    min: 3,
+    max: 80,
+    defaultEnabled: "1",
+    defaultMin: 4,
+    defaultMax: 60,
+    extraOptions: [
+      {
+        field: "startStop",
+        label: "スタート/ストップキャラクタ",
+        cmd: "CBRSSX",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "送信しない" },
+          { value: "1", label: "送信する" },
+        ],
+      },
+      {
+        field: "checkCharacter",
+        label: "チェックキャラクタ",
+        cmd: "CBRCK2",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "計算しない" },
+          { value: "1", label: "計算して送信しない" },
+          { value: "2", label: "計算して送信する" },
+        ],
+      },
+      {
+        field: "concatenate",
+        label: "連結",
+        cmd: "CBRCCT",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+          { value: "2", label: "必須" },
+        ],
+      },
+    ],
+  },
+  { codeId: "56", label: "Codablock A", enableCmd: "CBAENA", minCmd: "CBAMIN", maxCmd: "CBAMAX", min: 1, max: 600, defaultEnabled: "0", defaultMin: 1, defaultMax: 600 },
+  { codeId: "71", label: "Codablock F", enableCmd: "CBFENA", minCmd: "CBFMIN", maxCmd: "CBFMAX", min: 0, max: 2048, defaultEnabled: "0", defaultMin: 1, defaultMax: 2048 },
+  {
+    codeId: "68",
+    label: "Code 11",
+    enableCmd: "C11ENA",
+    minCmd: "C11MIN",
+    maxCmd: "C11MAX",
+    min: 3,
+    max: 80,
+    defaultEnabled: "0",
+    defaultMin: 4,
+    defaultMax: 80,
+    extraOptions: [
+      {
+        field: "checkCharacter",
+        label: "チェックデジット",
+        cmd: "C11CK2",
+        defaultValue: "1",
+        options: [
+          { value: "0", label: "1桁チェック" },
+          { value: "1", label: "2桁チェック" },
+        ],
+      },
+    ],
+  },
+  {
+    codeId: "6A",
+    label: "Code128",
+    enableCmd: "128ENA",
+    minCmd: "128MIN",
+    maxCmd: "128MAX",
+    min: 0,
+    max: 80,
+    defaultEnabled: "1",
+    defaultMin: 0,
+    defaultMax: 80,
+    extraOptions: [
+      {
+        field: "append",
+        label: "Append Mode",
+        cmd: "128APP",
+        defaultValue: "1",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+      {
+        field: "codePage",
+        label: "Code Page",
+        cmd: "128DCP",
+        defaultValue: "2",
+        min: 0,
+        max: 2,
+      },
+      {
+        field: "functionCodeTransmit",
+        label: "Function Code送信",
+        cmd: "128FNX",
+        defaultValue: "0",
+        min: 0,
+        max: 2,
+      },
+    ],
+  },
+  {
+    codeId: "62",
+    label: "Code39",
+    enableCmd: "C39ENA",
+    minCmd: "C39MIN",
+    maxCmd: "C39MAX",
+    min: 0,
+    max: 80,
+    defaultEnabled: "1",
+    defaultMin: 0,
+    defaultMax: 48,
+    extraOptions: [
+      {
+        field: "startStop",
+        label: "スタート/ストップキャラクタ",
+        cmd: "C39SSX",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "送信しない" },
+          { value: "1", label: "送信する" },
+        ],
+      },
+      {
+        field: "checkCharacter",
+        label: "チェックキャラクタ",
+        cmd: "C39CK2",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "計算しない" },
+          { value: "1", label: "計算して送信しない" },
+          { value: "2", label: "計算して送信する" },
+        ],
+      },
+      {
+        field: "append",
+        label: "Append Mode",
+        cmd: "C39APP",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+      {
+        field: "fullAscii",
+        label: "Full ASCII",
+        cmd: "C39ASC",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+      {
+        field: "codePage",
+        label: "Code Page",
+        cmd: "C39DCP",
+        defaultValue: "2",
+        min: 0,
+        max: 2,
+      },
+    ],
+  },
+  {
+    codeId: "69",
+    label: "Code93",
+    enableCmd: "C93ENA",
+    minCmd: "C93MIN",
+    maxCmd: "C93MAX",
+    min: 0,
+    max: 80,
+    defaultEnabled: "1",
+    defaultMin: 0,
+    defaultMax: 80,
+    extraOptions: [
+      {
+        field: "append",
+        label: "Append Mode",
+        cmd: "C93APP",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+      {
+        field: "codePage",
+        label: "Code Page",
+        cmd: "C93DCP",
+        defaultValue: "2",
+        min: 0,
+        max: 2,
+      },
+    ],
+  },
+  {
+    codeId: "77",
+    label: "Data Matrix",
+    enableCmd: "IDMENA",
+    minCmd: "IDMMIN",
+    maxCmd: "IDMMAX",
+    min: 1,
+    max: 3116,
+    defaultEnabled: "1",
+    defaultMin: 1,
+    defaultMax: 3116,
+    extraOptions: [
+      {
+        field: "smallSymbol",
+        label: "Small Symbol",
+        cmd: "IDMSSS",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "通常" },
+          { value: "1", label: "小シンボル対応" },
+        ],
+      },
+      {
+        field: "lowContrast",
+        label: "Low Contrast",
+        cmd: "IDMLSC",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "通常" },
+          { value: "1", label: "対応1" },
+          { value: "2", label: "対応2" },
+          { value: "3", label: "対応3" },
+        ],
+      },
+      {
+        field: "nonSquare",
+        label: "Non-Square改善",
+        cmd: "IDMNSQ",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+    ],
+  },
+  {
+    codeId: "79",
+    label: "GS1 DataBar / Composite",
+    enableCmd: "COMENA",
+    minCmd: "COMMIN",
+    maxCmd: "COMMAX",
+    min: 1,
+    max: 2435,
+    defaultEnabled: "0",
+    defaultMin: 1,
+    defaultMax: 2435,
+    extraOptions: [
+      {
+        field: "upcEanVersion",
+        label: "UPC/EAN Version",
+        cmd: "COMUPC",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+    ],
+  },
+  {
+    codeId: "7D",
+    label: "GS1 Expanded",
+    enableCmd: "RSEENA",
+    minCmd: "RSEMIN",
+    maxCmd: "RSEMAX",
+    min: 3,
+    max: 80,
+    defaultEnabled: "1",
+    defaultMin: 4,
+    defaultMax: 74,
+  },
+  {
+    codeId: "49",
+    label: "GS1-128",
+    enableCmd: "GS1ENA",
+    minCmd: "GS1MIN",
+    maxCmd: "GS1MAX",
+    min: 0,
+    max: 80,
+    defaultEnabled: "1",
+    defaultMin: 0,
+    defaultMax: 80,
+    extraOptions: [
+      {
+        field: "eanUccEmulation",
+        label: "EAN/UCC Emulation",
+        cmd: "EANEMU",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "GS1-128" },
+          { value: "2", label: "DataBar" },
+          { value: "3", label: "拡張OFF" },
+          { value: "4", label: "13桁EAN13" },
+        ],
+      },
+    ],
+  },
+  { codeId: "48", label: "Chinese Sensible Code", enableCmd: "HX_ENA", minCmd: "HX_MIN", maxCmd: "HX_MAX", min: 0, max: 7833, defaultEnabled: "0", defaultMin: 1, defaultMax: 7833 },
+  {
+    codeId: "65",
+    label: "Interleaved 2 of 5",
+    enableCmd: "I25ENA",
+    minCmd: "I25MIN",
+    maxCmd: "I25MAX",
+    min: 3,
+    max: 80,
+    defaultEnabled: "1",
+    defaultMin: 4,
+    defaultMax: 80,
+    extraOptions: [
+      {
+        field: "checkCharacter",
+        label: "チェックキャラクタ",
+        cmd: "I25CK2",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "計算しない" },
+          { value: "1", label: "計算して送信しない" },
+          { value: "2", label: "計算して送信する" },
+        ],
+      },
+    ],
+  },
+  {
+    codeId: "6D",
+    label: "Matrix 2 of 5",
+    enableCmd: "X25ENA",
+    minCmd: "X25MIN",
+    maxCmd: "X25MAX",
+    min: 3,
+    max: 80,
+    defaultEnabled: "0",
+    defaultMin: 4,
+    defaultMax: 80,
+  },
+  {
+    codeId: "78",
+    label: "MaxiCode",
+    enableCmd: "MAXENA",
+    minCmd: "MAXMIN",
+    maxCmd: "MAXMAX",
+    min: 1,
+    max: 150,
+    defaultEnabled: "0",
+    defaultMin: 1,
+    defaultMax: 150,
+    extraOptions: [
+      {
+        field: "smallSymbol",
+        label: "Small Symbol",
+        cmd: "MAXSSS",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+    ],
+  },
+  { codeId: "52", label: "Micro PDF417", enableCmd: "MPDENA", minCmd: "MPDMIN", maxCmd: "MPDMAX", min: 1, max: 2750, defaultEnabled: "0", defaultMin: 1, defaultMax: 366 },
+  {
+    codeId: "67",
+    label: "MSI",
+    enableCmd: "MSIENA",
+    minCmd: "MSIMIN",
+    maxCmd: "MSIMAX",
+    min: 3,
+    max: 80,
+    defaultEnabled: "0",
+    defaultMin: 4,
+    defaultMax: 48,
+    extraOptions: [
+      {
+        field: "checkCharacter",
+        label: "チェックキャラクタ",
+        cmd: "MSICHK",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "1桁Mod10/送信しない" },
+          { value: "1", label: "1桁Mod10/送信する" },
+          { value: "2", label: "2桁Mod10/送信しない" },
+          { value: "3", label: "2桁Mod10/送信する" },
+          { value: "4", label: "Mod11+Mod10/送信しない" },
+          { value: "5", label: "Mod11+Mod10/送信する" },
+          { value: "6", label: "計算しない" },
+        ],
+      },
+    ],
+  },
+  {
+    codeId: "59",
+    label: "NEC 2 of 5",
+    enableCmd: "N25ENA",
+    minCmd: "N25MIN",
+    maxCmd: "N25MAX",
+    min: 3,
+    max: 80,
+    defaultEnabled: "1",
+    defaultMin: 4,
+    defaultMax: 80,
+    extraOptions: [
+      {
+        field: "checkCharacter",
+        label: "チェックキャラクタ",
+        cmd: "N25CK2",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "計算しない" },
+          { value: "1", label: "計算して送信しない" },
+          { value: "2", label: "計算して送信する" },
+        ],
+      },
+    ],
+  },
+  {
+    codeId: "72",
+    label: "PDF417",
+    enableCmd: "PDFENA",
+    minCmd: "PDFMIN",
+    maxCmd: "PDFMAX",
+    min: 1,
+    max: 2750,
+    defaultEnabled: "1",
+    defaultMin: 1,
+    defaultMax: 2750,
+  },
+  {
+    codeId: "51",
+    label: "China Post",
+    enableCmd: "CPCENA",
+    minCmd: "CPCMIN",
+    maxCmd: "CPCMAX",
+    min: 3,
+    max: 80,
+    defaultEnabled: "0",
+    defaultMin: 4,
+    defaultMax: 80,
+  },
+  {
+    codeId: "3F",
+    label: "Korea Post",
+    enableCmd: "KPCENA",
+    minCmd: "KPCMIN",
+    maxCmd: "KPCMAX",
+    min: 4,
+    max: 48,
+    defaultEnabled: "0",
+    defaultMin: 4,
+    defaultMax: 48,
+    extraOptions: [
+      {
+        field: "checkDigitTransmit",
+        label: "チェックデジット",
+        cmd: "KPCCHK",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "送信しない" },
+          { value: "1", label: "送信する" },
+        ],
+      },
+    ],
+  },
+  {
+    codeId: "73",
+    label: "QRコード",
+    enableCmd: "QRCENA",
+    minCmd: "QRCMIN",
+    maxCmd: "QRCMAX",
+    min: 1,
+    max: 7089,
+    defaultEnabled: "1",
+    defaultMin: 1,
+    defaultMax: 7089,
+    extraOptions: [
+      {
+        field: "append",
+        label: "Append Mode",
+        cmd: "QRCAPP",
+        defaultValue: "1",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+      {
+        field: "codePage",
+        label: "Code Page",
+        cmd: "QRCDCP",
+        defaultValue: "3",
+        min: 0,
+        max: 3,
+      },
+      {
+        field: "smallSymbol",
+        label: "Small Symbol",
+        cmd: "QRCSSS",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "通常" },
+          { value: "1", label: "小シンボル対応" },
+        ],
+      },
+      {
+        field: "nonSquare",
+        label: "Non-Square改善",
+        cmd: "QRCNSQ",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+    ],
+  },
+  {
+    codeId: "66",
+    label: "Straight 2 of 5",
+    enableCmd: "A25ENA",
+    minCmd: "A25MIN",
+    maxCmd: "A25MAX",
+    min: 3,
+    max: 80,
+    defaultEnabled: "0",
+    defaultMin: 4,
+    defaultMax: 48,
+  },
+  {
+    codeId: "74",
+    label: "Telepen",
+    enableCmd: "TELENA",
+    minCmd: "TELMIN",
+    maxCmd: "TELMAX",
+    min: 1,
+    max: 80,
+    defaultEnabled: "0",
+    defaultMin: 1,
+    defaultMax: 60,
+    extraOptions: [
+      {
+        field: "oldStyle",
+        label: "Old Style Mode",
+        cmd: "TELOLD",
+        defaultValue: "0",
+        options: [
+          { value: "0", label: "OFF" },
+          { value: "1", label: "ON" },
+        ],
+      },
+    ],
+  },
+];
+
 const dataFormatEditorCommandTable = [
   { code: "F1", title: "全データを送信", description: "現在のカーソル位置から末尾までを送信し、最後に指定した1文字を追加します。", format: "F1xx", aliases: ["全送信", "send all"] },
   { code: "F2", title: "指定桁数を送信", description: "現在のカーソル位置から指定した桁数だけ送信し、最後に指定した1文字を追加します。", format: "F2nnxx", aliases: ["指定桁数", "部分出力"] },
@@ -566,6 +1139,20 @@ const categoryList = document.querySelector("#categoryList");
 const template = document.querySelector("#messageTemplate");
 const samplePrompts = document.querySelectorAll ? document.querySelectorAll(".sample-prompt") : [];
 const scannerMark = document.querySelector(".scanner-mark");
+const dataFormatSettingsToggle = document.querySelector("#dataFormatSettingsToggle");
+const dataFormatSettingsBody = document.querySelector("#dataFormatSettingsBody");
+const dataFormatDefaultModeSelect = document.querySelector("#dataFormatDefaultMode");
+const dataFormatterModeSelect = document.querySelector("#dataFormatterMode");
+const dataFormatErrorToneSelect = document.querySelector("#dataFormatErrorTone");
+const resetDataFormatSettingsButton = document.querySelector("#resetDataFormatSettings");
+const symbolSettingsToggle = document.querySelector("#symbolSettingsToggle");
+const symbolSettingsBody = document.querySelector("#symbolSettingsBody");
+const symbolSettingsRows = document.querySelector("#symbolSettingsRows");
+const disableAllSymbolsInput = document.querySelector("#disableAllSymbols");
+const appendSymbolsToDataFormatInput = document.querySelector("#appendSymbolsToDataFormat");
+const generateSymbolDefaultCommandButton = document.querySelector("#generateSymbolDefaultCommand");
+const resetSymbolSettingsButton = document.querySelector("#resetSymbolSettings");
+const generateSymbolSettingsButton = document.querySelector("#generateSymbolSettings");
 const sequenceToggle = document.querySelector("#sequenceToggle");
 const sequenceBuilderBody = document.querySelector("#sequenceBuilderBody");
 const sequenceItems = document.querySelector("#sequenceItems");
@@ -580,6 +1167,9 @@ let pendingClarification = null;
 let isAnswering = false;
 let outputSequenceItemCount = 2;
 const appendSequenceStorageKey = "honAppendSequenceToDataFormat";
+const appendSymbolsStorageKey = "honAppendSymbolsToDataFormat";
+const symbolDefaultCommand =
+  "CBRDFT;C39DFT;I25DFT;N25DFT;C93DFT;R25DFT;A25DFT;X25DFT;C11DFT;128DFT;GS1DFT;TELDFT;UPADFT;UPEDFT;E13DFT;EA8DFT;MSIDFT;RSSDFT;RSLDFT;RSEDFT;CBADFT;CBFDFT;PDFDFT;MPDDFT;QRCDFT;DOTDFT;IDMDFT;MAXDFT;AZTDFT;HX_DFT;POSTAL0;CPCDFT;KPCDFT.";
 
 function normalizeText(value) {
   return value
@@ -3880,11 +4470,53 @@ function shouldAppendOutputSequenceToDataFormat() {
   return Boolean(appendSequenceToDataFormatInput?.checked);
 }
 
+function shouldAppendSymbolsToDataFormat() {
+  return Boolean(appendSymbolsToDataFormatInput?.checked);
+}
+
 function buildCurrentOutputSequenceCommand() {
   return buildOutputSequenceCommand({
     mode: sequenceModeSelect?.value || "1",
     entries: getOutputSequenceFormEntries(),
   });
+}
+
+function stripDataFormatAdminSettings(command) {
+  const normalized = normalizeSettingCommand(command).replace(/\.$/, "");
+  return normalized
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part && !/^DFM_EN[1-4]$/i.test(part) && !/^DFMDEC[01]$/i.test(part))
+    .join(";");
+}
+
+function getDataFormatSettingsCommands() {
+  if (!dataFormatterModeSelect || !dataFormatErrorToneSelect) return [];
+  const formatter = dataFormatterModeSelect.value || "DFM_EN1";
+  const errorTone = dataFormatErrorToneSelect.value || "DFMDEC0";
+  return [
+    formatter !== "DFM_EN1" ? formatter : "",
+    errorTone !== "DFMDEC0" ? errorTone : "",
+  ].filter(Boolean);
+}
+
+function applyDataFormatSettingsAppend(item) {
+  if (!isDataFormatRegistrationItem(item)) return item;
+
+  const settingsCommands = getDataFormatSettingsCommands();
+  const withDefault = dataFormatDefaultModeSelect?.value === "on" ? applyClearSettingsPrefix(item, true) : item;
+  if (settingsCommands.length === 0) return withDefault;
+
+  const commandWithoutAdminSettings = stripDataFormatAdminSettings(withDefault.command);
+
+  return {
+    ...withDefault,
+    command: combineSettingCommands(commandWithoutAdminSettings, ...settingsCommands),
+    notes: [
+      ...(withDefault.notes || []),
+      `データフォーマット設定フォームの選択により、${settingsCommands.join(" と ")} を追加しました。`,
+    ],
+  };
 }
 
 function applyOutputSequenceAppend(item) {
@@ -3907,6 +4539,31 @@ function applyOutputSequenceAppend(item) {
     notes: [
       ...(item.notes || []),
       "アウトプットシーケンス追加がONのため、現在のアウトプットシーケンス設定コマンドを末尾に追加しました。",
+    ],
+  };
+}
+
+function applySymbolSettingsAppend(item) {
+  if (!shouldAppendSymbolsToDataFormat() || !isDataFormatRegistrationItem(item)) return item;
+
+  const symbolItem = buildSymbolSettingsCommand();
+  if (symbolItem.validationFailed) {
+    if (symbolItem.noChanges) return item;
+    return {
+      validationFailed: true,
+      validationErrors: [
+        "シンボル設定追加がONですが、シンボル設定が生成できません。",
+        ...(symbolItem.validationErrors || []),
+      ],
+    };
+  }
+
+  return {
+    ...item,
+    command: combineSettingCommands(item.command, symbolItem.command),
+    notes: [
+      ...(item.notes || []),
+      "シンボル設定追加がONのため、現在のシンボル設定コマンドを末尾に追加しました。",
     ],
   };
 }
@@ -4055,13 +4712,27 @@ function htmlToPlainText(html) {
 }
 
 function commandToHtml(item) {
+  if (item.validationFailed) {
+    return `
+      <div class="command-card">
+        <strong>生成前チェックで確認が必要です</strong>
+        <p>${escapeHtml(item.validationMessage || "設定値に確認が必要なため、バーコード生成を停止しました。")}</p>
+        <ul>
+          ${item.validationErrors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}
+        </ul>
+      </div>
+    `;
+  }
+
+  item = applyDataFormatSettingsAppend(item);
   item = applyOutputSequenceAppend(item);
+  item = applySymbolSettingsAppend(item);
 
   if (item.validationFailed) {
     return `
       <div class="command-card">
         <strong>生成前チェックで確認が必要です</strong>
-        <p>Intent理解JSONと生成コマンドの条件が一致しなかったため、バーコード生成を停止しました。</p>
+        <p>${escapeHtml(item.validationMessage || "追加設定に確認が必要なため、バーコード生成を停止しました。")}</p>
         <ul>
           ${item.validationErrors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}
         </ul>
@@ -4111,24 +4782,7 @@ function commandToHtml(item) {
 }
 
 function shouldClearSettingsBeforeCommand(query) {
-  const normalizedQuery = normalizeText(query);
-  const mentionsClear = [
-    "設定削除してから",
-    "設定削除して",
-    "設定を削除してから",
-    "設定を削除して",
-    "設定消去してから",
-    "設定消去して",
-    "設定を消去してから",
-    "設定を消去して",
-    "設定クリアしてから",
-    "設定クリアして",
-    "設定をクリアしてから",
-    "設定をクリアして",
-  ].some((word) => normalizedQuery.includes(normalizeText(word)));
-  const requestsNewDataFormat = normalizedQuery.includes("データフォーマット") && /(作成|登録|新規)/.test(normalizedQuery);
-
-  return mentionsClear || requestsNewDataFormat;
+  return false;
 }
 
 function applyClearSettingsPrefix(item, shouldPrefix) {
@@ -5058,8 +5712,7 @@ async function answerQuestion(question) {
   const exactAdminMatches = findExactAdminCommandMatches(question);
   if (exactAdminMatches.length === 1) {
     const intentUnderstanding = buildIntentUnderstanding(question);
-    const shouldClearSettings = shouldClearSettingsBeforeCommand(question);
-    const item = validateGeneratedCommand(applyClearSettingsPrefix(exactAdminMatches[0], shouldClearSettings), intentUnderstanding);
+    const item = validateGeneratedCommand(exactAdminMatches[0], intentUnderstanding);
     if (!item?.validationFailed) {
       addBotResponse(originalQuestion, commandToHtml(item), { html: true });
       return;
@@ -5080,19 +5733,14 @@ async function answerQuestion(question) {
 
   question = chooseLlmEffectiveQuestion(question, llmIntent);
 
-  const shouldClearSettings = shouldClearSettingsBeforeCommand(originalQuestion) || shouldClearSettingsBeforeCommand(question);
   const intentUnderstanding = buildIntentUnderstanding(question);
   const commandHtml = async (item) => {
-    const checked = validateGeneratedCommand(applyClearSettingsPrefix(item, shouldClearSettings), intentUnderstanding);
+    const checked = validateGeneratedCommand(item, intentUnderstanding);
     if (!checked?.validationFailed) return commandToHtml(checked);
 
     const fallback = await buildFallbackGpt41Command(originalQuestion);
     if (fallback?.item && fallback?.intentUnderstanding) {
-      const fallbackShouldClear = shouldClearSettingsBeforeCommand(originalQuestion) || shouldClearSettingsBeforeCommand(fallback.question);
-      const fallbackChecked = validateGeneratedCommand(
-        applyClearSettingsPrefix(fallback.item, fallbackShouldClear),
-        fallback.intentUnderstanding
-      );
+      const fallbackChecked = validateGeneratedCommand(fallback.item, fallback.intentUnderstanding);
       if (!fallbackChecked?.validationFailed) return commandToHtml(fallbackChecked);
     }
 
@@ -5379,6 +6027,180 @@ function getOutputSequenceFormEntries() {
   }));
 }
 
+function renderSymbolSettingsBuilder() {
+  if (!symbolSettingsRows) return;
+
+  symbolSettingsRows.innerHTML = symbolSettingsCommandTable
+    .map((settings) => {
+      const extraOptions = (settings.extraOptions || [])
+        .map((option) => `
+          <label class="symbol-settings-extra-field">
+            <span>${escapeHtml(option.label)}</span>
+            ${option.options
+              ? `<select data-symbol-extra-field="${escapeHtml(option.field)}">
+                  ${option.options.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("")}
+                </select>`
+              : `<input data-symbol-extra-field="${escapeHtml(option.field)}" type="number" inputmode="numeric" min="${option.min}" max="${option.max}" value="${escapeHtml(option.defaultValue)}" />`}
+          </label>
+        `)
+        .join("");
+
+      return `
+      <div class="symbol-settings-row ${extraOptions ? "has-extra" : ""}" data-symbol-code-id="${escapeHtml(settings.codeId)}">
+        <div class="symbol-settings-name">
+          <strong>${escapeHtml(settings.label)}</strong>
+          <span>${escapeHtml(settings.codeId)}</span>
+        </div>
+        <label class="symbol-settings-enabled">
+          <input data-symbol-field="enabled" type="checkbox" ${settings.defaultEnabled === "1" ? "checked" : ""} />
+        </label>
+        <label class="symbol-settings-number">
+          <span>最小</span>
+          <input data-symbol-field="min" type="number" inputmode="numeric" min="${settings.min}" max="${settings.max}" value="${settings.defaultMin}" />
+        </label>
+        <label class="symbol-settings-number">
+          <span>最大</span>
+          <input data-symbol-field="max" type="number" inputmode="numeric" min="${settings.min}" max="${settings.max}" value="${settings.defaultMax}" />
+        </label>
+        ${extraOptions ? `<div class="symbol-settings-extra">${extraOptions}</div>` : ""}
+      </div>
+    `;
+    })
+    .join("");
+  resetSymbolSettingsForm();
+}
+
+function resetSymbolSettingsForm() {
+  if (!symbolSettingsRows) return;
+  if (disableAllSymbolsInput) disableAllSymbolsInput.checked = false;
+
+  symbolSettingsCommandTable.forEach((settings) => {
+    const row = symbolSettingsRows.querySelector(`[data-symbol-code-id="${settings.codeId}"]`);
+    if (!row) return;
+    const enabledInput = row.querySelector("[data-symbol-field='enabled']");
+    const minInput = row.querySelector("[data-symbol-field='min']");
+    const maxInput = row.querySelector("[data-symbol-field='max']");
+    if (enabledInput) enabledInput.checked = settings.defaultEnabled === "1";
+    if (minInput) minInput.value = String(settings.defaultMin);
+    if (maxInput) maxInput.value = String(settings.defaultMax);
+    (settings.extraOptions || []).forEach((option) => {
+      const select = row.querySelector(`[data-symbol-extra-field="${option.field}"]`);
+      if (select) select.value = option.defaultValue;
+    });
+  });
+}
+
+function buildSymbolSettingsCommand() {
+  const rows = symbolSettingsRows ? [...symbolSettingsRows.querySelectorAll(".symbol-settings-row")] : [];
+  const disableAllSymbols = Boolean(disableAllSymbolsInput?.checked);
+  const errors = [];
+  const commands = [];
+  const changedLabels = [];
+
+  rows.forEach((row) => {
+    const settings = symbolSettingsCommandTable.find((item) => item.codeId === row.dataset.symbolCodeId);
+    if (!settings) return;
+
+    const enabled = row.querySelector("[data-symbol-field='enabled']")?.checked ? "1" : "0";
+    const minLength = Number(row.querySelector("[data-symbol-field='min']")?.value);
+    const maxLength = Number(row.querySelector("[data-symbol-field='max']")?.value);
+
+    if (!Number.isInteger(minLength) || minLength < settings.min || minLength > settings.max) {
+      errors.push(`${settings.label} の最小読取桁数は ${settings.min}〜${settings.max} で入力してください。`);
+    }
+    if (!Number.isInteger(maxLength) || maxLength < settings.min || maxLength > settings.max) {
+      errors.push(`${settings.label} の最大読取桁数は ${settings.min}〜${settings.max} で入力してください。`);
+    }
+    if (Number.isInteger(minLength) && Number.isInteger(maxLength) && minLength > maxLength) {
+      errors.push(`${settings.label} の最小読取桁数は最大読取桁数以下で入力してください。`);
+    }
+
+    const rowChangedCommands = [];
+    if (enabled !== settings.defaultEnabled && !(disableAllSymbols && enabled === "0")) {
+      rowChangedCommands.push(`${settings.enableCmd}${enabled}`);
+    }
+    if (minLength !== settings.defaultMin) rowChangedCommands.push(`${settings.minCmd}${minLength}`);
+    if (maxLength !== settings.defaultMax) rowChangedCommands.push(`${settings.maxCmd}${maxLength}`);
+
+    const extraChanged = (settings.extraOptions || []).some((option) => {
+      const control = row.querySelector(`[data-symbol-extra-field="${option.field}"]`);
+      const value = control?.value || option.defaultValue;
+      if (!option.options) {
+        const numberValue = Number(value);
+        if (!Number.isInteger(numberValue) || numberValue < option.min || numberValue > option.max) {
+          errors.push(`${settings.label} の${option.label}は ${option.min}〜${option.max} で入力してください。`);
+        }
+      }
+      if (value === option.defaultValue) return false;
+      rowChangedCommands.push(`${option.cmd}${value}`);
+      return true;
+    });
+    const changed =
+      enabled !== settings.defaultEnabled ||
+      minLength !== settings.defaultMin ||
+      maxLength !== settings.defaultMax ||
+      extraChanged;
+    if (changed) {
+      commands.push(...rowChangedCommands);
+      changedLabels.push(settings.label);
+    }
+  });
+
+  if (errors.length > 0) {
+    return {
+      validationFailed: true,
+      validationMessage: "シンボル設定の入力値を確認してください。",
+      validationErrors: errors,
+    };
+  }
+
+  if (!disableAllSymbols && commands.length === 0) {
+    return {
+      validationFailed: true,
+      noChanges: true,
+      validationMessage: "初期値と異なるシンボル設定がありません。",
+      validationErrors: ["変更した項目がある場合のみ設定コマンドを生成します。"],
+    };
+  }
+
+  return {
+    id: "symbol-settings-all",
+    label: "シンボル設定",
+    category: "シンボル設定",
+    summary: "初期値と異なるシンボル設定のみを生成します。",
+    keywords: [],
+    command: `${[disableAllSymbols ? "ALLENA0" : "", ...commands].filter(Boolean).join(";")}.`,
+    skipGenerationValidation: true,
+    notes: [
+      "初期値と異なる項目だけを設定コマンドとして生成します。",
+      ...(disableAllSymbols ? ["ALLENA0; を先頭に付加して、全シンボルを無効にします。"] : []),
+      changedLabels.length > 0 ? `初期値から変更されたシンボル種: ${changedLabels.join("、")}` : "全シンボル種が初期値です。",
+    ],
+  };
+}
+
+function submitSymbolSettingsForm() {
+  const item = buildSymbolSettingsCommand();
+  addMessage("user", "シンボル設定");
+  addBotResponse("シンボル設定", commandToHtml(item), { html: true });
+}
+
+function submitSymbolDefaultCommand() {
+  const item = {
+    id: "symbol-default-command",
+    label: "シンボル設定 初期値バー",
+    category: "シンボル設定",
+    summary: "シンボル設定を初期値に戻す設定バーコードを生成します。",
+    keywords: [],
+    command: symbolDefaultCommand,
+    skipGenerationValidation: true,
+    notes: ["指定されたシンボル設定初期値コマンドでバーコードを生成します。"],
+  };
+
+  addMessage("user", "シンボル設定 初期値バー");
+  addBotResponse("シンボル設定 初期値バー", commandToHtml(item), { html: true });
+}
+
 function renderOutputSequenceBuilder() {
   if (!sequenceItems) return;
 
@@ -5549,6 +6371,47 @@ samplePrompts.forEach((button) => {
   });
 });
 
+dataFormatSettingsToggle?.addEventListener("click", () => {
+  const expanded = dataFormatSettingsToggle.getAttribute("aria-expanded") === "true";
+  dataFormatSettingsToggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+  dataFormatSettingsToggle.textContent = expanded ? "開く" : "閉じる";
+  if (dataFormatSettingsBody) dataFormatSettingsBody.hidden = expanded;
+});
+
+resetDataFormatSettingsButton?.addEventListener("click", () => {
+  if (dataFormatDefaultModeSelect) dataFormatDefaultModeSelect.value = "off";
+  if (dataFormatterModeSelect) dataFormatterModeSelect.value = "DFM_EN1";
+  if (dataFormatErrorToneSelect) dataFormatErrorToneSelect.value = "DFMDEC0";
+});
+
+symbolSettingsToggle?.addEventListener("click", () => {
+  const expanded = symbolSettingsToggle.getAttribute("aria-expanded") === "true";
+  symbolSettingsToggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+  symbolSettingsToggle.textContent = expanded ? "開く" : "閉じる";
+  if (symbolSettingsBody) symbolSettingsBody.hidden = expanded;
+});
+
+resetSymbolSettingsButton?.addEventListener("click", () => {
+  resetSymbolSettingsForm();
+});
+
+generateSymbolDefaultCommandButton?.addEventListener("click", () => {
+  submitSymbolDefaultCommand();
+});
+
+disableAllSymbolsInput?.addEventListener("change", () => {
+  if (!disableAllSymbolsInput.checked) return;
+  symbolSettingsRows
+    ?.querySelectorAll("[data-symbol-field='enabled']")
+    .forEach((input) => {
+      input.checked = false;
+    });
+});
+
+generateSymbolSettingsButton?.addEventListener("click", () => {
+  submitSymbolSettingsForm();
+});
+
 sequenceToggle?.addEventListener("click", () => {
   const expanded = sequenceToggle.getAttribute("aria-expanded") === "true";
   sequenceToggle.setAttribute("aria-expanded", expanded ? "false" : "true");
@@ -5595,6 +6458,14 @@ appendSequenceToDataFormatInput?.addEventListener("change", () => {
   }
 });
 
+appendSymbolsToDataFormatInput?.addEventListener("change", () => {
+  try {
+    localStorage.setItem(appendSymbolsStorageKey, appendSymbolsToDataFormatInput.checked ? "1" : "0");
+  } catch (_error) {
+    // 保存できない場合も現在のスイッチ状態だけで動作します。
+  }
+});
+
 scannerMark?.addEventListener("click", () => {
   window.clearTimeout(adminClickTimer);
   adminClickCount += 1;
@@ -5621,8 +6492,17 @@ if (appendSequenceToDataFormatInput) {
   }
 }
 
+if (appendSymbolsToDataFormatInput) {
+  try {
+    appendSymbolsToDataFormatInput.checked = localStorage.getItem(appendSymbolsStorageKey) === "1";
+  } catch (_error) {
+    appendSymbolsToDataFormatInput.checked = false;
+  }
+}
+
 renderQuickActions();
 renderCategories();
+renderSymbolSettingsBuilder();
 renderOutputSequenceBuilder();
 loadAdminCommandCatalog().finally(() => addMessage("bot", welcomeText));
 

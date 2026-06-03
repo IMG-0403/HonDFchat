@@ -392,6 +392,12 @@ h2 {
   font-weight: 800;
 }
 
+.sequence-toggle {
+  flex: 0 0 auto;
+  min-width: 64px;
+  white-space: nowrap;
+}
+
 .sequence-toggle:hover,
 .sequence-toggle:focus-visible,
 .sequence-actions button:hover,
@@ -434,6 +440,7 @@ h2 {
   font-weight: 800;
 }
 
+.sequence-mode-row input,
 .sequence-mode-row select,
 .sequence-field input,
 .sequence-field select {
@@ -447,6 +454,7 @@ h2 {
   outline: none;
 }
 
+.sequence-mode-row input:focus,
 .sequence-mode-row select:focus,
 .sequence-field input:focus,
 .sequence-field select:focus {
@@ -473,6 +481,188 @@ h2 {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
+}
+
+.sequence-mode-row .data-format-append-switch,
+.sequence-mode-row .symbol-append-switch {
+  display: inline-flex;
+  flex-direction: row;
+  justify-content: flex-start;
+}
+
+.sequence-mode-row .data-format-append-switch span,
+.sequence-mode-row .symbol-append-switch span {
+  display: inline-block;
+}
+
+.symbol-settings-list {
+  display: grid;
+  gap: 8px;
+}
+
+.symbol-settings-header,
+.symbol-settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 52px 52px;
+  gap: 6px;
+  align-items: center;
+}
+
+.symbol-settings-header {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.symbol-settings-header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.symbol-settings-header .symbol-enable-header {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+
+.symbol-disable-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--accent-dark);
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.symbol-disable-all input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.symbol-disable-all:hover,
+.symbol-disable-all:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.symbol-settings-row {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.symbol-settings-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.symbol-settings-name strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.symbol-settings-name span,
+.symbol-settings-number span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.symbol-settings-enabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-dark);
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.symbol-settings-enabled input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
+}
+
+.symbol-settings-number {
+  display: grid;
+  gap: 4px;
+}
+
+.symbol-settings-number input {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.symbol-settings-number input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.symbol-settings-extra {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.symbol-settings-extra-field {
+  display: grid;
+  gap: 4px;
+}
+
+.symbol-settings-extra-field span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.symbol-settings-extra-field input,
+.symbol-settings-extra-field select {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.76rem;
+  outline: none;
+}
+
+.symbol-settings-extra-field input:focus,
+.symbol-settings-extra-field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
 }
 
 .sequence-items {
@@ -960,7 +1150,7 @@ h2 {
 }
 
 .aztec-canvas {
-  width: auto;
+  width: min(100%, 180px);
   max-width: 100%;
   height: auto;
   image-rendering: pixelated;
@@ -1164,7 +1354,7 @@ h2 {
 
 .mobile-page .aztec-canvas {
   display: block;
-  width: min(100%, 200px);
+  width: min(100%, 160px);
   max-width: 100%;
   margin: 2px auto 12px;
 }
