@@ -72,6 +72,16 @@ const commandCatalog = [
     notes: ["0 は Primary Data Format、099 は全端末、6A は Code128、0020 は20桁を表す指定です。", "20桁以外のCode128にはこのデータフォーマットは適用されません。"],
   },
   {
+    id: "df-example-code39-16-first-15",
+    label: "Code39 16桁読み取り時のみ先頭15桁を出力",
+    category: "登録例",
+    summary: "16桁のCode39を読み取った時だけ、データ先頭から15桁のみを出力します。",
+    requestText: "Code39の16桁読み取り時、先頭15桁出力設定",
+    keywords: ["code39", "code 39", "コード39", "16桁", "先頭15桁", "15桁", "先頭", "最初", "一部", "部分出力", "f2", "62", "0016", "切り出し"],
+    command: "DFMBK30099620016F21500.",
+    notes: ["0 は Primary Data Format、099 は全端末、62 は Code39、0016 は16桁を表す指定です。", "F2 15 00 は先頭から15桁を送信する Data Format Editor コマンドです。", "16桁以外のCode39にはこのデータフォーマットは適用されません。"],
+  },
+  {
     id: "df-example-ocr-remove-hyphen-space",
     label: "OCR読み取り時のみハイフンとスペースを削除",
     category: "登録例",
@@ -1313,6 +1323,27 @@ function findMatches(query) {
     .map((result) => result.item);
 }
 
+function findExactCommandMatches(query) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return [];
+
+  const exactMatches = commandCatalog.filter((item) => {
+    const requestText = normalizeText(item.requestText || "");
+    const label = normalizeText(item.label || "");
+    return normalizedQuery === requestText || normalizedQuery === label;
+  });
+  if (exactMatches.length > 0) return exactMatches;
+
+  const relaxedQuery = normalizeAdminCommandMatchText(query);
+  if (!relaxedQuery) return [];
+
+  return commandCatalog.filter((item) =>
+    [item.requestText || "", item.label || ""]
+      .filter(Boolean)
+      .some((text) => normalizeAdminCommandMatchText(text) === relaxedQuery)
+  );
+}
+
 function getAllCommandCatalog() {
   return [...commandCatalog, ...adminCommandCatalog];
 }
@@ -1422,7 +1453,7 @@ function escapeRegExp(value) {
 }
 
 function getReadLengths(normalizedQuery) {
-  const lengthPattern = /((?:\d{1,4}\s*桁\s*(?:と|、|,|，|\/|\+|&|and)?\s*)+)\s*(?:読み取り|読取|バーコード|コード)/g;
+  const lengthPattern = /(?<![a-z0-9])((?:\d{1,4}\s*桁\s*(?:と|、|,|，|\/|\+|&|and)?\s*)+)\s*(?:読み取り|読取|バーコード|コード)/g;
   const lengths = [];
   let match;
 
@@ -1448,8 +1479,8 @@ function getReadLengths(normalizedQuery) {
   }
 
   const explicitLengthPatterns = [
-    /(?:桁数|読取桁数|読み取り桁数|長さ|length)\s*(?:指定|条件)?\s*[:：]?\s*(\d{1,4})\s*桁/g,
-    /(\d{1,4})\s*桁\s*(?:指定|の指定|条件)/g,
+    /(?:桁数|読取桁数|読み取り桁数|長さ|length)\s*(?:指定|条件)?\s*[:：]?\s*(?<![a-z0-9])(\d{1,4})\s*桁/g,
+    /(?<![a-z0-9])(\d{1,4})\s*桁\s*(?:指定|の指定|条件)/g,
   ];
   for (const pattern of explicitLengthPatterns) {
     while ((match = pattern.exec(normalizedQuery)) !== null) {
@@ -4910,6 +4941,8 @@ function validateGeneratedCommand(item, intentUnderstanding) {
     }
   });
 
+  validationErrors.push(...findUnexpectedLengthConditionErrors(command, targetConditions));
+
   intentUnderstanding.actions.forEach((action) => {
     const expectedEditorCommands = getExpectedEditorCommandsForAction(action);
     if (expectedEditorCommands.length === 0) return;
@@ -4957,6 +4990,44 @@ function validateGeneratedCommand(item, intentUnderstanding) {
       ...(item.notes || []),
     ],
   };
+}
+
+function findUnexpectedLengthConditionErrors(command, targetConditions) {
+  const explicitConditions = targetConditions.filter((condition) =>
+    condition.source !== "default" &&
+    condition.lengthField &&
+    condition.lengthField !== "9999"
+  );
+  if (explicitConditions.length === 0) return [];
+
+  const allowedByCode = new Map();
+  explicitConditions.forEach((condition) => {
+    const codeId = condition.codeId.toUpperCase();
+    const allowed = allowedByCode.get(codeId) || new Set();
+    allowed.add(condition.lengthField);
+    allowedByCode.set(codeId, allowed);
+  });
+
+  const errors = [];
+  const seen = new Set();
+  const blockPattern = /0099([0-9A-F]{2})([0-9]{4})/gi;
+  let match;
+  while ((match = blockPattern.exec(command)) !== null) {
+    const codeId = match[1].toUpperCase();
+    const lengthField = match[2];
+    const allowedLengths = allowedByCode.get(codeId) || allowedByCode.get("99");
+    if (!allowedLengths || allowedLengths.has(lengthField)) continue;
+
+    const key = `${codeId}-${lengthField}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const label = getSymbologyLabelById(codeId);
+    const allowedText = [...allowedLengths].map((value) => `${Number(value)}桁(${value})`).join("、");
+    errors.push(`${label} の読取桁数 ${lengthField} は質問条件にありません。許可される桁数: ${allowedText}`);
+  }
+
+  return errors;
 }
 
 function getExpectedEditorCommandsForAction(action) {
@@ -5805,6 +5876,16 @@ async function answerQuestion(question) {
   if (exactAdminMatches.length === 1) {
     const intentUnderstanding = buildIntentUnderstanding(question);
     const item = validateGeneratedCommand(exactAdminMatches[0], intentUnderstanding);
+    if (!item?.validationFailed) {
+      addBotResponse(originalQuestion, commandToHtml(item), { html: true });
+      return;
+    }
+  }
+
+  const exactCommandMatches = findExactCommandMatches(question);
+  if (exactCommandMatches.length === 1) {
+    const intentUnderstanding = buildIntentUnderstanding(question);
+    const item = validateGeneratedCommand(exactCommandMatches[0], intentUnderstanding);
     if (!item?.validationFailed) {
       addBotResponse(originalQuestion, commandToHtml(item), { html: true });
       return;
