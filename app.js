@@ -6216,7 +6216,7 @@ function renderSymbolSettingsBuilder() {
       const hasLengthSettings = Boolean(settings.minCmd && settings.maxCmd);
       const extraOptions = (settings.extraOptions || [])
         .map((option) => `
-          <label class="symbol-settings-extra-field">
+          <label class="symbol-settings-extra-field" data-symbol-command-field="${escapeHtml(option.field)}">
             <span>${escapeHtml(option.label)}</span>
             ${option.options
               ? `<select data-symbol-extra-field="${escapeHtml(option.field)}">
@@ -6233,14 +6233,14 @@ function renderSymbolSettingsBuilder() {
           <strong>${escapeHtml(settings.label)}</strong>
           <span>${escapeHtml(settings.codeId)}</span>
         </div>
-        <label class="symbol-settings-enabled">
+        <label class="symbol-settings-enabled" data-symbol-command-field="enabled">
           <input data-symbol-field="enabled" type="checkbox" ${settings.defaultEnabled === "1" ? "checked" : ""} />
         </label>
-        ${hasLengthSettings ? `<label class="symbol-settings-number">
+        ${hasLengthSettings ? `<label class="symbol-settings-number" data-symbol-command-field="min">
           <span>最小</span>
           <input data-symbol-field="min" type="number" inputmode="numeric" min="${settings.min}" max="${settings.max}" value="${settings.defaultMin}" />
         </label>
-        <label class="symbol-settings-number">
+        <label class="symbol-settings-number" data-symbol-command-field="max">
           <span>最大</span>
           <input data-symbol-field="max" type="number" inputmode="numeric" min="${settings.min}" max="${settings.max}" value="${settings.defaultMax}" />
         </label>` : `<span class="symbol-fixed-length">固定桁</span>`}
@@ -6363,6 +6363,81 @@ function buildSymbolSettingsCommand() {
       changedLabels.length > 0 ? `初期値から変更されたシンボル種: ${changedLabels.join("、")}` : "全シンボル種が初期値です。",
     ],
   };
+}
+
+function buildSingleSymbolSettingCommand(row, fieldName) {
+  const settings = symbolSettingsCommandTable.find((item) => item.codeId === row?.dataset.symbolCodeId);
+  if (!settings) return null;
+
+  let command = "";
+  let fieldLabel = "";
+  let valueLabel = "";
+
+  if (fieldName === "enabled") {
+    const enabled = row.querySelector("[data-symbol-field='enabled']")?.checked ? "1" : "0";
+    command = `${settings.enableCmd}${enabled}`;
+    fieldLabel = "有効/無効";
+    valueLabel = enabled === "1" ? "有効" : "無効";
+  } else if (fieldName === "min" || fieldName === "max") {
+    const hasLengthSettings = Boolean(settings.minCmd && settings.maxCmd);
+    if (!hasLengthSettings) return null;
+
+    const control = row.querySelector(`[data-symbol-field='${fieldName}']`);
+    const value = Number(control?.value);
+    if (!Number.isInteger(value) || value < settings.min || value > settings.max) {
+      return {
+        validationFailed: true,
+        validationMessage: "シンボル設定の入力値を確認してください。",
+        validationErrors: [`${settings.label} の${fieldName === "min" ? "最小" : "最大"}読取桁数は ${settings.min}〜${settings.max} で入力してください。`],
+      };
+    }
+
+    command = `${fieldName === "min" ? settings.minCmd : settings.maxCmd}${value}`;
+    fieldLabel = fieldName === "min" ? "最小読取桁数" : "最大読取桁数";
+    valueLabel = String(value);
+  } else {
+    const option = (settings.extraOptions || []).find((item) => item.field === fieldName);
+    const control = option ? row.querySelector(`[data-symbol-extra-field="${option.field}"]`) : null;
+    if (!option || !control) return null;
+
+    const value = control.value || option.defaultValue;
+    if (!option.options) {
+      const numberValue = Number(value);
+      if (!Number.isInteger(numberValue) || numberValue < option.min || numberValue > option.max) {
+        return {
+          validationFailed: true,
+          validationMessage: "シンボル設定の入力値を確認してください。",
+          validationErrors: [`${settings.label} の${option.label}は ${option.min}〜${option.max} で入力してください。`],
+        };
+      }
+    }
+
+    command = `${option.cmd}${value}`;
+    fieldLabel = option.label;
+    valueLabel = option.options?.find((item) => item.value === value)?.label || value;
+  }
+
+  return {
+    id: `symbol-setting-${settings.codeId}-${fieldName}`,
+    label: `${settings.label} ${fieldLabel}`,
+    category: "シンボル設定",
+    summary: `${settings.label} の「${fieldLabel}」だけを現在値「${valueLabel}」で設定します。`,
+    keywords: [],
+    command: `${command}.`,
+    skipGenerationValidation: true,
+    notes: [
+      "ダブルクリックした項目だけの現在値で設定バーコードを生成します。",
+      `${command} は ${settings.label} の「${fieldLabel}」を「${valueLabel}」に設定します。`,
+    ],
+  };
+}
+
+function submitSingleSymbolSetting(row, fieldName) {
+  const item = buildSingleSymbolSettingCommand(row, fieldName);
+  if (!item) return;
+  const title = item.label || "シンボル設定";
+  addMessage("user", title);
+  addBotResponse(title, commandToHtml(item), { html: true });
 }
 
 function submitSymbolSettingsForm() {
@@ -6609,6 +6684,14 @@ disableAllSymbolsInput?.addEventListener("change", () => {
 
 generateSymbolSettingsButton?.addEventListener("click", () => {
   submitSymbolSettingsForm();
+});
+
+symbolSettingsRows?.addEventListener("dblclick", (event) => {
+  const target = event.target.closest("[data-symbol-command-field]");
+  if (!target) return;
+  const row = target.closest(".symbol-settings-row");
+  if (!row) return;
+  submitSingleSymbolSetting(row, target.dataset.symbolCommandField);
 });
 
 sequenceToggle?.addEventListener("click", () => {
