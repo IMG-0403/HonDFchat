@@ -565,6 +565,10 @@ h2 {
   background: var(--surface);
 }
 
+.symbol-settings-row.is-fixed-length {
+  grid-template-columns: minmax(0, 1fr) 44px auto;
+}
+
 .symbol-settings-name {
   display: grid;
   gap: 2px;
@@ -624,6 +628,19 @@ h2 {
 .symbol-settings-number input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.symbol-fixed-length {
+  display: grid;
+  min-height: 32px;
+  padding: 0 8px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .symbol-settings-extra {

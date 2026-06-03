@@ -709,6 +709,99 @@ const symbolSettingsCommandTable = [
     ],
   },
   {
+    codeId: "64",
+    label: "EAN/JAN-13",
+    enableCmd: "E13ENA",
+    defaultEnabled: "1",
+    defaultMin: 13,
+    defaultMax: 13,
+    extraOptions: [
+      { field: "addenda2", label: "2桁アドオン", cmd: "E13AD2", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addenda5", label: "5桁アドオン", cmd: "E13AD5", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addendaOnly", label: "アドオン必須", cmd: "E13ARQ", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addendaSeparator", label: "アドオン区切りスペース", cmd: "E13ADS", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "checkCharacter", label: "チェックキャラクタ送信", cmd: "E13CKX", defaultValue: "1", options: [{ value: "0", label: "送信しない" }, { value: "1", label: "送信する" }] },
+      { field: "isbn", label: "ISBN", cmd: "E13ISB", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "isbnReformat", label: "ISBN Reformat", cmd: "E13IBR", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "isbn13Reformat", label: "ISBN 13桁リフォーマット", cmd: "E13I13", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "booklandIssn", label: "Bookland(977) ISSN変換", cmd: "E13ISS", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "issnFormat", label: "ISSN Format", cmd: "E13ISR", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "system2Addenda", label: "System-2アドオン必須", cmd: "ARQSY2", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addenda290", label: "290アドオン必須", cmd: "ARQ290", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addenda414", label: "414/419アドオン必須", cmd: "ARQ414", defaultValue: "0", options: [{ value: "0", label: "無効" }, { value: "1", label: "2桁" }, { value: "2", label: "5桁" }, { value: "3", label: "2桁または5桁" }] },
+      { field: "addenda434", label: "434/439アドオン必須", cmd: "ARQ434", defaultValue: "0", options: [{ value: "0", label: "無効" }, { value: "1", label: "2桁" }, { value: "2", label: "5桁" }, { value: "3", label: "2桁または5桁" }] },
+      { field: "addenda378", label: "378/379アドオン必須", cmd: "ARQ378", defaultValue: "0", options: [{ value: "0", label: "無効" }, { value: "1", label: "2桁" }, { value: "2", label: "5桁" }, { value: "3", label: "2桁または5桁" }] },
+      { field: "addenda977", label: "977アドオン必須", cmd: "ARQ977", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addenda978", label: "978アドオン必須", cmd: "ARQ978", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addenda979", label: "979アドオン必須", cmd: "ARQ979", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "stitching", label: "Stitching", cmd: "E13STC", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+    ],
+  },
+  {
+    codeId: "44",
+    label: "EAN/JAN-8",
+    enableCmd: "EA8ENA",
+    defaultEnabled: "1",
+    defaultMin: 8,
+    defaultMax: 8,
+    extraOptions: [
+      { field: "addenda2", label: "2桁アドオン", cmd: "EA8AD2", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addenda5", label: "5桁アドオン", cmd: "EA8AD5", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addendaOnly", label: "アドオン必須", cmd: "EA8ARQ", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addendaSeparator", label: "アドオン区切りスペース", cmd: "EA8ADS", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "checkCharacter", label: "チェックキャラクタ送信", cmd: "EA8CKX", defaultValue: "1", options: [{ value: "0", label: "送信しない" }, { value: "1", label: "送信する" }] },
+      { field: "securityThreshold", label: "UPC/EANセキュリティしきい値", cmd: "EANRTH", defaultValue: "0", options: [{ value: "0", label: "最も積極的" }, { value: "1", label: "より積極的" }, { value: "2", label: "より安全" }, { value: "3", label: "最も安全" }] },
+      { field: "securityMinOverlap", label: "UPC/EAN最小スティッチング重複", cmd: "EANOLP", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "securityExtendedOverlap", label: "UPC/EAN拡張スティッチング重複", cmd: "EANXOP", defaultValue: "0", options: [{ value: "0", label: "なし" }, { value: "1", label: "+1" }, { value: "2", label: "端以外" }, { value: "3", label: "全て" }] },
+      { field: "allowStitching30Bars", label: "30本以上バーのスティッチング許可", cmd: "EANB30", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "collapseVoids", label: "UPC/EANボイド結合", cmd: "EANVOD", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "stitchingTimer", label: "UPC/EANスティッチングタイマー(ms)", cmd: "EANSTO", defaultValue: "100", min: 0, max: 65535 },
+      { field: "stitching", label: "Stitching", cmd: "EA8STC", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+    ],
+  },
+  {
+    codeId: "63",
+    label: "UPC-A",
+    enableCmd: "UPBENA",
+    defaultEnabled: "1",
+    defaultMin: 12,
+    defaultMax: 12,
+    extraOptions: [
+      { field: "convertToEan13", label: "UPC-AからEAN-13に変換", cmd: "UPAENA", defaultValue: "1", options: [{ value: "1", label: "無効" }, { value: "0", label: "有効" }] },
+      { field: "addenda2", label: "2桁アドオン", cmd: "UPAAD2", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addenda5", label: "5桁アドオン", cmd: "UPAAD5", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addendaOnly", label: "アドオン必須", cmd: "UPAARQ", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addendaSeparator", label: "アドオン区切りスペース", cmd: "UPAADS", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "checkCharacter", label: "チェックキャラクタ送信", cmd: "UPACKX", defaultValue: "1", options: [{ value: "0", label: "送信しない" }, { value: "1", label: "送信する" }] },
+      { field: "numberSystem", label: "Number System送信", cmd: "UPANSX", defaultValue: "1", options: [{ value: "0", label: "送信しない" }, { value: "1", label: "送信する" }] },
+      { field: "stitching", label: "Stitching", cmd: "UPASTC", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "coupon", label: "拡張Coupon", cmd: "CPNENA", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "連結許可" }, { value: "2", label: "連結必須" }] },
+      { field: "couponGs1Output", label: "Coupon GS1 DataBar出力", cmd: "CPNGS1", defaultValue: "0", options: [{ value: "0", label: "ON" }, { value: "1", label: "OFF" }] },
+      { field: "system4Addenda", label: "System-4アドオン必須", cmd: "ARQSY4", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "system5Addenda", label: "System-5アドオン必須", cmd: "ARQSY5", defaultValue: "0", options: [{ value: "0", label: "無効" }, { value: "1", label: "2桁" }, { value: "2", label: "5桁" }, { value: "3", label: "2桁または5桁" }, { value: "4", label: "Coupon" }, { value: "5", label: "Couponまたは2桁" }, { value: "6", label: "Couponまたは5桁" }, { value: "7", label: "Coupon/2桁/5桁" }] },
+    ],
+  },
+  {
+    codeId: "45",
+    label: "UPC-E",
+    enableCmd: "UPEEN0",
+    defaultEnabled: "1",
+    defaultMin: 6,
+    defaultMax: 6,
+    extraOptions: [
+      { field: "addenda2", label: "2桁アドオン", cmd: "UPEAD2", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addenda5", label: "5桁アドオン", cmd: "UPEAD5", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addendaOnly", label: "アドオン必須", cmd: "UPEARQ", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "addendaSeparator", label: "アドオン区切りスペース", cmd: "UPEADS", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "checkCharacter", label: "チェックキャラクタ送信", cmd: "UPECKX", defaultValue: "1", options: [{ value: "0", label: "送信しない" }, { value: "1", label: "送信する" }] },
+      { field: "expand", label: "UPC-E展開", cmd: "UPEEXP", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "numberSystem", label: "Number System送信", cmd: "UPENSX", defaultValue: "1", options: [{ value: "0", label: "送信しない" }, { value: "1", label: "送信する" }] },
+      { field: "stitching", label: "UPC-Eスティッチング", cmd: "UPESTC", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "upce0NumberSystem", label: "UPC-E0 Number System", cmd: "UPEEXN", defaultValue: "1", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+      { field: "upce1", label: "UPC-E1", cmd: "UPEEN1", defaultValue: "0", options: [{ value: "0", label: "OFF" }, { value: "1", label: "ON" }] },
+    ],
+  },
+  {
     codeId: "77",
     label: "Data Matrix",
     enableCmd: "IDMENA",
@@ -6031,6 +6124,7 @@ function renderSymbolSettingsBuilder() {
 
   symbolSettingsRows.innerHTML = symbolSettingsCommandTable
     .map((settings) => {
+      const hasLengthSettings = Boolean(settings.minCmd && settings.maxCmd);
       const extraOptions = (settings.extraOptions || [])
         .map((option) => `
           <label class="symbol-settings-extra-field">
@@ -6045,7 +6139,7 @@ function renderSymbolSettingsBuilder() {
         .join("");
 
       return `
-      <div class="symbol-settings-row ${extraOptions ? "has-extra" : ""}" data-symbol-code-id="${escapeHtml(settings.codeId)}">
+      <div class="symbol-settings-row ${extraOptions ? "has-extra" : ""} ${hasLengthSettings ? "" : "is-fixed-length"}" data-symbol-code-id="${escapeHtml(settings.codeId)}">
         <div class="symbol-settings-name">
           <strong>${escapeHtml(settings.label)}</strong>
           <span>${escapeHtml(settings.codeId)}</span>
@@ -6053,14 +6147,14 @@ function renderSymbolSettingsBuilder() {
         <label class="symbol-settings-enabled">
           <input data-symbol-field="enabled" type="checkbox" ${settings.defaultEnabled === "1" ? "checked" : ""} />
         </label>
-        <label class="symbol-settings-number">
+        ${hasLengthSettings ? `<label class="symbol-settings-number">
           <span>最小</span>
           <input data-symbol-field="min" type="number" inputmode="numeric" min="${settings.min}" max="${settings.max}" value="${settings.defaultMin}" />
         </label>
         <label class="symbol-settings-number">
           <span>最大</span>
           <input data-symbol-field="max" type="number" inputmode="numeric" min="${settings.min}" max="${settings.max}" value="${settings.defaultMax}" />
-        </label>
+        </label>` : `<span class="symbol-fixed-length">固定桁</span>`}
         ${extraOptions ? `<div class="symbol-settings-extra">${extraOptions}</div>` : ""}
       </div>
     `;
@@ -6081,8 +6175,8 @@ function resetSymbolSettingsForm() {
     const minInput = row.querySelector("[data-symbol-field='min']");
     const maxInput = row.querySelector("[data-symbol-field='max']");
     if (enabledInput) enabledInput.checked = settings.defaultEnabled === "1";
-    if (minInput) minInput.value = String(settings.defaultMin);
-    if (maxInput) maxInput.value = String(settings.defaultMax);
+    if (minInput && settings.minCmd) minInput.value = String(settings.defaultMin);
+    if (maxInput && settings.maxCmd) maxInput.value = String(settings.defaultMax);
     (settings.extraOptions || []).forEach((option) => {
       const select = row.querySelector(`[data-symbol-extra-field="${option.field}"]`);
       if (select) select.value = option.defaultValue;
@@ -6102,16 +6196,17 @@ function buildSymbolSettingsCommand() {
     if (!settings) return;
 
     const enabled = row.querySelector("[data-symbol-field='enabled']")?.checked ? "1" : "0";
-    const minLength = Number(row.querySelector("[data-symbol-field='min']")?.value);
-    const maxLength = Number(row.querySelector("[data-symbol-field='max']")?.value);
+    const hasLengthSettings = Boolean(settings.minCmd && settings.maxCmd);
+    const minLength = hasLengthSettings ? Number(row.querySelector("[data-symbol-field='min']")?.value) : settings.defaultMin;
+    const maxLength = hasLengthSettings ? Number(row.querySelector("[data-symbol-field='max']")?.value) : settings.defaultMax;
 
-    if (!Number.isInteger(minLength) || minLength < settings.min || minLength > settings.max) {
+    if (hasLengthSettings && (!Number.isInteger(minLength) || minLength < settings.min || minLength > settings.max)) {
       errors.push(`${settings.label} の最小読取桁数は ${settings.min}〜${settings.max} で入力してください。`);
     }
-    if (!Number.isInteger(maxLength) || maxLength < settings.min || maxLength > settings.max) {
+    if (hasLengthSettings && (!Number.isInteger(maxLength) || maxLength < settings.min || maxLength > settings.max)) {
       errors.push(`${settings.label} の最大読取桁数は ${settings.min}〜${settings.max} で入力してください。`);
     }
-    if (Number.isInteger(minLength) && Number.isInteger(maxLength) && minLength > maxLength) {
+    if (hasLengthSettings && Number.isInteger(minLength) && Number.isInteger(maxLength) && minLength > maxLength) {
       errors.push(`${settings.label} の最小読取桁数は最大読取桁数以下で入力してください。`);
     }
 
@@ -6121,8 +6216,8 @@ function buildSymbolSettingsCommand() {
     } else if (enabled !== settings.defaultEnabled && !(disableAllSymbols && enabled === "0")) {
       rowChangedCommands.push(`${settings.enableCmd}${enabled}`);
     }
-    if (minLength !== settings.defaultMin) rowChangedCommands.push(`${settings.minCmd}${minLength}`);
-    if (maxLength !== settings.defaultMax) rowChangedCommands.push(`${settings.maxCmd}${maxLength}`);
+    if (hasLengthSettings && minLength !== settings.defaultMin) rowChangedCommands.push(`${settings.minCmd}${minLength}`);
+    if (hasLengthSettings && maxLength !== settings.defaultMax) rowChangedCommands.push(`${settings.maxCmd}${maxLength}`);
 
     const extraChanged = (settings.extraOptions || []).some((option) => {
       const control = row.querySelector(`[data-symbol-extra-field="${option.field}"]`);
