@@ -1167,7 +1167,6 @@ let pendingClarification = null;
 let isAnswering = false;
 let outputSequenceItemCount = 2;
 const appendSequenceStorageKey = "honAppendSequenceToDataFormat";
-const appendSymbolsStorageKey = "honAppendSymbolsToDataFormat";
 const symbolDefaultCommand =
   "CBRDFT;C39DFT;I25DFT;N25DFT;C93DFT;R25DFT;A25DFT;X25DFT;C11DFT;128DFT;GS1DFT;TELDFT;UPADFT;UPEDFT;E13DFT;EA8DFT;MSIDFT;RSSDFT;RSLDFT;RSEDFT;CBADFT;CBFDFT;PDFDFT;MPDDFT;QRCDFT;DOTDFT;IDMDFT;MAXDFT;AZTDFT;HX_DFT;POSTAL0;CPCDFT;KPCDFT.";
 
@@ -6073,6 +6072,7 @@ function renderSymbolSettingsBuilder() {
 function resetSymbolSettingsForm() {
   if (!symbolSettingsRows) return;
   if (disableAllSymbolsInput) disableAllSymbolsInput.checked = false;
+  if (appendSymbolsToDataFormatInput) appendSymbolsToDataFormatInput.checked = false;
 
   symbolSettingsCommandTable.forEach((settings) => {
     const row = symbolSettingsRows.querySelector(`[data-symbol-code-id="${settings.codeId}"]`);
@@ -6116,7 +6116,9 @@ function buildSymbolSettingsCommand() {
     }
 
     const rowChangedCommands = [];
-    if (enabled !== settings.defaultEnabled && !(disableAllSymbols && enabled === "0")) {
+    if (disableAllSymbols && enabled === "1") {
+      rowChangedCommands.push(`${settings.enableCmd}1`);
+    } else if (enabled !== settings.defaultEnabled && !(disableAllSymbols && enabled === "0")) {
       rowChangedCommands.push(`${settings.enableCmd}${enabled}`);
     }
     if (minLength !== settings.defaultMin) rowChangedCommands.push(`${settings.minCmd}${minLength}`);
@@ -6268,6 +6270,14 @@ function submitOutputSequenceForm() {
 function clearOutputSequenceForm() {
   outputSequenceItemCount = 2;
   if (sequenceModeSelect) sequenceModeSelect.value = "1";
+  if (appendSequenceToDataFormatInput) {
+    appendSequenceToDataFormatInput.checked = false;
+    try {
+      localStorage.setItem(appendSequenceStorageKey, "0");
+    } catch (_error) {
+      // 保存できない場合も現在のチェック状態だけ戻します。
+    }
+  }
   if (sequenceItems) sequenceItems.textContent = "";
   renderOutputSequenceBuilder();
 }
@@ -6458,14 +6468,6 @@ appendSequenceToDataFormatInput?.addEventListener("change", () => {
   }
 });
 
-appendSymbolsToDataFormatInput?.addEventListener("change", () => {
-  try {
-    localStorage.setItem(appendSymbolsStorageKey, appendSymbolsToDataFormatInput.checked ? "1" : "0");
-  } catch (_error) {
-    // 保存できない場合も現在のスイッチ状態だけで動作します。
-  }
-});
-
 scannerMark?.addEventListener("click", () => {
   window.clearTimeout(adminClickTimer);
   adminClickCount += 1;
@@ -6489,14 +6491,6 @@ if (appendSequenceToDataFormatInput) {
     appendSequenceToDataFormatInput.checked = localStorage.getItem(appendSequenceStorageKey) === "1";
   } catch (_error) {
     appendSequenceToDataFormatInput.checked = false;
-  }
-}
-
-if (appendSymbolsToDataFormatInput) {
-  try {
-    appendSymbolsToDataFormatInput.checked = localStorage.getItem(appendSymbolsStorageKey) === "1";
-  } catch (_error) {
-    appendSymbolsToDataFormatInput.checked = false;
   }
 }
 
