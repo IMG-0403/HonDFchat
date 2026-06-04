@@ -4012,7 +4012,9 @@ function buildSuffixTextCommand(query) {
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengths = getReadLengths(normalizedQuery);
   const textLength = String(encoded.byteCount).padStart(4, "0");
-  const editorCommand = `F100BA${textLength}${encoded.hex}`;
+  const singleControl = normalizeInsertControlToken(suffixText);
+  const usesSendAllWithControl = Boolean(singleControl && singleControl.hex.length === 2 && singleControl.hex === encoded.hex);
+  const editorCommand = usesSendAllWithControl ? `F1${encoded.hex}` : `F100BA${textLength}${encoded.hex}`;
   const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
   const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
   const lengthNote = readLengths.length > 0
@@ -4028,8 +4030,10 @@ function buildSuffixTextCommand(query) {
     command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
-      "F100 は読み取りデータを全て出力する指定です。",
-      `BA${textLength}${encoded.hex} は ${encoded.label} をデータ末尾に挿入する指定です。`,
+      usesSendAllWithControl
+        ? `F1${encoded.hex} は読み取りデータを全て出力し、末尾に ${encoded.label} を付加する指定です。`
+        : "F100 は読み取りデータを全て出力する指定です。",
+      ...(!usesSendAllWithControl ? [`BA${textLength}${encoded.hex} は ${encoded.label} をデータ末尾に挿入する指定です。`] : []),
     ],
   };
 }
