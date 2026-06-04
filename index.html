@@ -62,30 +62,42 @@
             </div>
           </section>
 
-          <button class="sample-prompt" type="button" data-sample-prompt="QRの10桁読み取り時、3桁目から5桁出力設定">
-            <span>サンプル例① データ抽出</span>
-            <strong>QRの10桁読み取り時、3桁目から5桁出力設定</strong>
-          </button>
-          <button class="sample-prompt" type="button" data-sample-prompt="NW-7読み取り時、先頭にABCの文字列挿入設定">
-            <span>サンプル例② キャラクタ挿入</span>
-            <strong>NW-7読み取り時、先頭にABCの文字列挿入設定</strong>
-          </button>
-          <button class="sample-prompt" type="button" data-sample-prompt="GS1-128読み取り時、GSキャラクタを#に置換出力設定">
-            <span>サンプル例③ キャラクタ置換</span>
-            <strong>GS1-128読み取り時、GSキャラクタを#に置換出力設定</strong>
-          </button>
-          <button class="sample-prompt" type="button" data-sample-prompt="Code128読み取り時、データ末尾にCTRL+ALT+F5のキー挿入設定">
-            <span>サンプル例⓸ キーストローク挿入</span>
-            <strong>Code128読み取り時、データ末尾にCTRL+ALT+F5のキー挿入設定</strong>
-          </button>
-          <button class="sample-prompt" type="button" data-sample-prompt="OCRの10桁読み取り時、ハイフン削除設定とCode128読み取り時、スペースを#に置換出力設定">
-            <span>サンプル例⑤ 複数コード種設定</span>
-            <strong>OCRの10桁読み取り時、ハイフン削除設定とCode128読み取り時、スペースを#に置換出力設定</strong>
-          </button>
-
-          <section class="panel">
-            <div class="quick-actions" id="quickActions"></div>
+          <section class="sequence-builder" id="outputSequenceBuilder" aria-label="アウトプットシーケンス設定">
+            <div class="sequence-builder-header">
+              <div>
+                <p class="eyebrow">OUTPUT SEQUENCE</p>
+                <h3>アウトプットシーケンス設定</h3>
+              </div>
+              <button class="sequence-toggle" id="sequenceToggle" type="button" aria-expanded="false" aria-controls="sequenceBuilderBody">
+                開く
+              </button>
+            </div>
+            <div class="sequence-builder-body" id="sequenceBuilderBody" hidden>
+              <div class="sequence-mode-row">
+                <label class="sequence-switch data-format-append-switch">
+                  <input id="appendSequenceToDataFormat" type="checkbox" />
+                  <span>データフォーマット生成時に追加</span>
+                </label>
+              </div>
+              <div class="sequence-mode-row">
+                <label>
+                  アウトプットシーケンスモード設定
+                  <select id="sequenceMode">
+                    <option value="0">無効</option>
+                    <option value="1">有効、要求しない</option>
+                    <option value="2">有効、要求する</option>
+                  </select>
+                </label>
+              </div>
+              <div class="sequence-items" id="sequenceItems"></div>
+              <div class="sequence-actions">
+                <button type="button" id="clearSequenceItems">クリア</button>
+                <button type="button" id="addSequenceItem">バー追加</button>
+                <button type="button" id="generateSequenceCommand">生成</button>
+              </div>
+            </div>
           </section>
+
           <section class="sequence-builder" id="symbolSettingsBuilder" aria-label="シンボル設定">
             <div class="sequence-builder-header">
               <div>
@@ -123,40 +135,30 @@
               </div>
             </div>
           </section>
-          <section class="sequence-builder" id="outputSequenceBuilder" aria-label="アウトプットシーケンス設定">
-            <div class="sequence-builder-header">
-              <div>
-                <p class="eyebrow">OUTPUT SEQUENCE</p>
-                <h3>アウトプットシーケンス設定</h3>
-              </div>
-              <button class="sequence-toggle" id="sequenceToggle" type="button" aria-expanded="false" aria-controls="sequenceBuilderBody">
-                開く
-              </button>
-            </div>
-            <div class="sequence-builder-body" id="sequenceBuilderBody" hidden>
-              <div class="sequence-mode-row">
-                <label class="sequence-switch data-format-append-switch">
-                  <input id="appendSequenceToDataFormat" type="checkbox" />
-                  <span>データフォーマット生成時に追加</span>
-                </label>
-              </div>
-              <div class="sequence-mode-row">
-                <label>
-                  アウトプットシーケンスモード設定
-                  <select id="sequenceMode">
-                    <option value="0">無効</option>
-                    <option value="1">有効、要求しない</option>
-                    <option value="2">有効、要求する</option>
-                  </select>
-                </label>
-              </div>
-              <div class="sequence-items" id="sequenceItems"></div>
-              <div class="sequence-actions">
-                <button type="button" id="clearSequenceItems">クリア</button>
-                <button type="button" id="addSequenceItem">バー追加</button>
-                <button type="button" id="generateSequenceCommand">生成</button>
-              </div>
-            </div>
+
+          <button class="sample-prompt" type="button" data-sample-prompt="QRの10桁読み取り時、3桁目から5桁出力設定">
+            <span>データフォーマットサンプル例① データ抽出</span>
+            <strong>QRの10桁読み取り時、3桁目から5桁出力設定</strong>
+          </button>
+          <button class="sample-prompt" type="button" data-sample-prompt="NW-7読み取り時、先頭にABCの文字列挿入設定">
+            <span>データフォーマットサンプル例② キャラクタ挿入</span>
+            <strong>NW-7読み取り時、先頭にABCの文字列挿入設定</strong>
+          </button>
+          <button class="sample-prompt" type="button" data-sample-prompt="GS1-128読み取り時、GSキャラクタを#に置換出力設定">
+            <span>データフォーマットサンプル例③ キャラクタ置換</span>
+            <strong>GS1-128読み取り時、GSキャラクタを#に置換出力設定</strong>
+          </button>
+          <button class="sample-prompt" type="button" data-sample-prompt="Code128読み取り時、データ末尾にCTRL+ALT+F5のキー挿入設定">
+            <span>データフォーマットサンプル例⓸ キーストローク挿入</span>
+            <strong>Code128読み取り時、データ末尾にCTRL+ALT+F5のキー挿入設定</strong>
+          </button>
+          <button class="sample-prompt" type="button" data-sample-prompt="OCRの10桁読み取り時、ハイフン削除設定とCode128読み取り時、スペースを#に置換出力設定">
+            <span>データフォーマットサンプル例⑤ 複数コード種設定</span>
+            <strong>OCRの10桁読み取り時、ハイフン削除設定とCode128読み取り時、スペースを#に置換出力設定</strong>
+          </button>
+
+          <section class="panel">
+            <div class="quick-actions" id="quickActions"></div>
           </section>
         </div>
 
