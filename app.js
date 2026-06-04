@@ -6229,7 +6229,7 @@ function renderSymbolSettingsBuilder() {
 
       return `
       <div class="symbol-settings-row ${extraOptions ? "has-extra" : ""} ${hasLengthSettings ? "" : "is-fixed-length"}" data-symbol-code-id="${escapeHtml(settings.codeId)}">
-        <div class="symbol-settings-name">
+        <div class="symbol-settings-name" data-symbol-command-field="symbol">
           <strong>${escapeHtml(settings.label)}</strong>
           <span>${escapeHtml(settings.codeId)}</span>
         </div>
@@ -6373,7 +6373,7 @@ function buildSingleSymbolSettingCommand(row, fieldName) {
   let fieldLabel = "";
   let valueLabel = "";
 
-  if (fieldName === "enabled") {
+  if (fieldName === "symbol" || fieldName === "enabled") {
     const enabled = row.querySelector("[data-symbol-field='enabled']")?.checked ? "1" : "0";
     command = `${settings.enableCmd}${enabled}`;
     fieldLabel = "有効/無効";
