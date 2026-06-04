@@ -470,7 +470,7 @@ const symbologyCodeTable = [
   { codeId: "62", label: "Code39", aliases: ["code39", "code 39", "コード39", "コード 39"] },
   { codeId: "54", label: "TLC39", aliases: ["tlc39", "tcif linked code39"] },
   { codeId: "69", label: "Code93", aliases: ["code93", "code 93", "code 93i", "コード93"] },
-  { codeId: "64", label: "EAN-13/JAN-13", aliases: ["ean", "ean13", "ean-13", "jan", "jan13", "jan-13", "bookland"] },
+  { codeId: "64", label: "EAN-13/JAN-13", aliases: ["ean", "ean13", "ean-13", "ena13", "ena-13", "jan", "jan13", "jan-13", "bookland"] },
   { codeId: "44", label: "EAN-8", aliases: ["ean8", "ean-8"] },
   { codeId: "79", label: "GS1 DataBar", aliases: ["gs1", "gs1 databar", "gs1 composite", "gs1 omnidirectional"] },
   { codeId: "7B", label: "GS1 Limited", aliases: ["gs1 limited"] },
