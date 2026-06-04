@@ -6221,7 +6221,7 @@ function renderSymbolSettingsBuilder() {
       const extraOptions = (settings.extraOptions || [])
         .map((option) => `
           <label class="symbol-settings-extra-field" data-symbol-command-field="${escapeHtml(option.field)}">
-            <span>${escapeHtml(option.label)}</span>
+            <span data-symbol-command-trigger="${escapeHtml(option.field)}">${escapeHtml(option.label)}</span>
             ${option.options
               ? `<select data-symbol-extra-field="${escapeHtml(option.field)}">
                   ${option.options.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("")}
@@ -6234,18 +6234,18 @@ function renderSymbolSettingsBuilder() {
       return `
       <div class="symbol-settings-row ${extraOptions ? "has-extra" : ""} ${hasLengthSettings ? "" : "is-fixed-length"}" data-symbol-code-id="${escapeHtml(settings.codeId)}">
         <div class="symbol-settings-name" data-symbol-command-field="symbol">
-          <strong>${escapeHtml(settings.label)}</strong>
+          <strong data-symbol-command-trigger="symbol">${escapeHtml(settings.label)}</strong>
           <span>${escapeHtml(settings.codeId)}</span>
         </div>
         <label class="symbol-settings-enabled" data-symbol-command-field="enabled">
           <input data-symbol-field="enabled" type="checkbox" ${settings.defaultEnabled === "1" ? "checked" : ""} />
         </label>
         ${hasLengthSettings ? `<label class="symbol-settings-number" data-symbol-command-field="min">
-          <span>最小</span>
+          <span data-symbol-command-trigger="min">最小</span>
           <input data-symbol-field="min" type="number" inputmode="numeric" min="${settings.min}" max="${settings.max}" value="${settings.defaultMin}" />
         </label>
         <label class="symbol-settings-number" data-symbol-command-field="max">
-          <span>最大</span>
+          <span data-symbol-command-trigger="max">最大</span>
           <input data-symbol-field="max" type="number" inputmode="numeric" min="${settings.min}" max="${settings.max}" value="${settings.defaultMax}" />
         </label>` : `<span class="symbol-fixed-length">固定桁</span>`}
         ${extraOptions ? `<div class="symbol-settings-extra">${extraOptions}</div>` : ""}
@@ -6325,8 +6325,9 @@ function buildSymbolSettingsCommand() {
       rowChangedCommands.push(`${option.cmd}${value}`);
       return true;
     });
+    const enabledChanged = disableAllSymbols ? enabled === "1" : enabled !== settings.defaultEnabled;
     const changed =
-      enabled !== settings.defaultEnabled ||
+      enabledChanged ||
       minLength !== settings.defaultMin ||
       maxLength !== settings.defaultMax ||
       extraChanged;
@@ -6691,11 +6692,11 @@ generateSymbolSettingsButton?.addEventListener("click", () => {
 });
 
 symbolSettingsRows?.addEventListener("dblclick", (event) => {
-  const target = event.target.closest("[data-symbol-command-field]");
+  const target = event.target.closest("[data-symbol-command-trigger]");
   if (!target) return;
   const row = target.closest(".symbol-settings-row");
   if (!row) return;
-  submitSingleSymbolSetting(row, target.dataset.symbolCommandField);
+  submitSingleSymbolSetting(row, target.dataset.symbolCommandTrigger);
 });
 
 sequenceToggle?.addEventListener("click", () => {
