@@ -1635,6 +1635,7 @@ function buildSingleClauseCommand(clause) {
     findExactSpaceTransformCommand,
     buildDeleteThenLeadingCommand,
     buildDeleteThenFromPositionToEndCommand,
+    buildBetweenCharacterDeleteCommand,
     findExactDeleteCharacterCommand,
     buildUntilCharacterCommand,
     buildPrefixValueFilterCommand,
@@ -2342,6 +2343,61 @@ function buildSearchUntilCharacterCommand(query) {
   };
 }
 
+function findBetweenCharacterDeletion(query) {
+  const normalizedCaseQuery = query
+    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/[「」『』【】［］\[\]“”]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|fnc1|fnc 1|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const patterns = [
+    new RegExp(`(${tokenPattern})\\s*(?:で|に)?\\s*(?:挟まれた|はさまれた|囲まれた|囲った|囲んだ)\\s*(?:部分|箇所|データ|文字列)?\\s*(?:だけ)?\\s*(?:を)?\\s*(?:削除|除去|消す|消して)`, "i"),
+    new RegExp(`(${tokenPattern})\\s*(?:から|以降|後ろから)\\s*\\1\\s*(?:まで|手前まで)?\\s*(?:の)?\\s*(?:部分|箇所|データ|文字列)?\\s*(?:だけ)?\\s*(?:を)?\\s*(?:削除|除去|消す|消して)`, "i"),
+    new RegExp(`(${tokenPattern})\\s*(?:と|、|,)\\s*\\1\\s*(?:の)?\\s*(?:間|あいだ|間の部分|あいだの部分)\\s*(?:だけ)?\\s*(?:を)?\\s*(?:削除|除去|消す|消して)`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalizedCaseQuery.match(pattern);
+    if (!match) continue;
+    const char = normalizeReplaceCharacter(match[1]);
+    if (char) return char;
+  }
+
+  return null;
+}
+
+function buildBetweenCharacterDeleteCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const targetChar = findBetweenCharacterDeletion(query);
+  if (!targetChar) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const targetHex = targetChar.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const targetLabel = describeReplaceCharacter(targetChar);
+  const editorCommand = `F3${targetHex}00F501F8${targetHex}F501F100`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-between-delete-${targetHex}-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
+    label: `${codeLabel}・${lengthLabel} ${targetLabel}で挟まれた部分を削除`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、最初の${targetLabel}から次の${targetLabel}までの部分を削除し、それ以外を出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `F3${targetHex}00 は最初の ${targetLabel} の手前までを出力する指定です。`,
+      `F501 で最初の ${targetLabel} を飛ばし、F8${targetHex}F501 で次の ${targetLabel} の後ろまでカーソルを移動します。`,
+      "F100 で残りのデータを出力します。",
+    ],
+  };
+}
+
 function findOutputAfterNthCharacter(query) {
   const normalizedCaseQuery = query
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
@@ -2410,6 +2466,7 @@ function buildCommandFromStructuredNlp(question, intentUnderstanding = buildInte
     buildDeleteThenLeadingCommand,
     findExactSpaceTransformCommand,
     buildDeleteThenFromPositionToEndCommand,
+    buildBetweenCharacterDeleteCommand,
     findExactDeleteCharacterCommand,
     buildSearchUntilCharacterCommand,
     buildOutputAfterNthCharacterCommand,
@@ -4727,6 +4784,7 @@ function iconForCategory(category) {
 
 const chatLogStorageKey = "honDataFormatChatLogs";
 const chatLogLimit = 1000;
+let currentLogSource = "";
 
 function addMessage(role, content, options = {}) {
   if (!content) return null;
@@ -4790,10 +4848,13 @@ function setAnswerInputLocked(locked) {
 
 function saveChatbotLog(question, answerContent, options = {}) {
   if (!question || !answerContent) return;
+  const answer = normalizeLogAnswer(answerContent, options);
   const logEntry = {
     createdAt: new Date().toISOString(),
     question: String(question),
-    answer: normalizeLogAnswer(answerContent, options),
+    answer,
+    source: options.source || currentLogSource || "tool",
+    barcodeGenerated: inferBarcodeGeneratedForLog(question, answer, options),
   };
 
   try {
@@ -4813,7 +4874,7 @@ async function saveRemoteChatbotLog(logEntry) {
   if (!url || !anonKey) return;
 
   try {
-    await fetch(`${url}/rest/v1/chatbot_logs`, {
+    const response = await fetch(`${url}/rest/v1/chatbot_logs`, {
       method: "POST",
       headers: {
         apikey: anonKey,
@@ -4825,13 +4886,65 @@ async function saveRemoteChatbotLog(logEntry) {
         created_at: logEntry.createdAt,
         question: logEntry.question,
         answer: logEntry.answer,
+        source: logEntry.source,
+        barcode_generated: logEntry.barcodeGenerated,
         page_url: window.location.href,
         user_agent: navigator.userAgent,
       }),
     });
+    if (!response.ok && response.status >= 400) {
+      await fetch(`${url}/rest/v1/chatbot_logs`, {
+        method: "POST",
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({
+          created_at: logEntry.createdAt,
+          question: logEntry.question,
+          answer: logEntry.answer,
+          page_url: window.location.href,
+          user_agent: navigator.userAgent,
+        }),
+      });
+    }
   } catch (_error) {
     // Supabaseへ保存できない場合も、ローカルログとチャット回答は継続します。
   }
+}
+
+function inferBarcodeGeneratedForLog(question, answer, options = {}) {
+  if (typeof options.barcodeGenerated === "boolean") return options.barcodeGenerated;
+  if (isSettingCommandQuestion(question)) return null;
+  if (isBarcodeGenerationFailureAnswer(answer)) return false;
+  if (isBarcodeGenerationSuccessAnswer(answer)) return true;
+  return null;
+}
+
+function isSettingCommandQuestion(question) {
+  const normalized = String(question || "").trim().replace(/\s+/g, "").toUpperCase();
+  return /^DFM(?:BK3|DF3|DF|CL3)|^DFMDF3[.;]?/.test(normalized);
+}
+
+function isBarcodeGenerationFailureAnswer(answer) {
+  const text = String(answer || "");
+  const failedPatterns = [
+    "設定バーコードを生成できません",
+    "バーコード生成を停止",
+    "生成前チェックで確認が必要",
+    "確認が必要です",
+    "該当するデータフォーマット設定が見つかりません",
+  ];
+  return failedPatterns.some((pattern) => text.includes(pattern));
+}
+
+function isBarcodeGenerationSuccessAnswer(answer) {
+  const text = String(answer || "");
+  const hasBarcodeSection = text.includes("設定用バーコード");
+  const hasSettingCommand = /DFM(?:BK3|DF3|DF|CL3)[A-Z0-9;|?.]*/i.test(text);
+  return hasBarcodeSection && hasSettingCommand;
 }
 
 function normalizeLogAnswer(content, options = {}) {
@@ -5837,6 +5950,7 @@ function buildGeneratedCommandCandidate(question, intentUnderstanding = buildInt
     buildDeleteThenRangeCommand,
     buildDeleteThenLeadingCommand,
     buildDeleteThenFromPositionToEndCommand,
+    buildBetweenCharacterDeleteCommand,
     () => buildCommandFromStructuredNlp(question, intentUnderstanding),
     buildSymbologyDelayKeyCommand,
     buildSuffixB5Command,
@@ -5955,6 +6069,7 @@ async function answerQuestion(question) {
   const deleteThenRangeCommand = buildDeleteThenRangeCommand(question);
   const deleteThenLeadingCommand = buildDeleteThenLeadingCommand(question);
   const deleteThenFromPositionToEndCommand = buildDeleteThenFromPositionToEndCommand(question);
+  const betweenCharacterDeleteCommand = buildBetweenCharacterDeleteCommand(question);
   const exactDeleteCommand = findExactDeleteCharacterCommand(question);
   const searchUntilCharacterCommand = buildSearchUntilCharacterCommand(question);
   const untilCharacterCommand = buildUntilCharacterCommand(question);
@@ -6079,6 +6194,11 @@ async function answerQuestion(question) {
     return;
   }
 
+  if (betweenCharacterDeleteCommand) {
+    addBotResponse(originalQuestion, await commandHtml(betweenCharacterDeleteCommand), { html: true });
+    return;
+  }
+
   if (structuredNlpCommand) {
     addBotResponse(originalQuestion, await commandHtml(structuredNlpCommand), { html: true });
     return;
@@ -6168,19 +6288,22 @@ async function answerQuestion(question) {
   addBotResponse(originalQuestion, (await Promise.all(matches.map(commandHtml))).join(""), { html: true });
 }
 
-function submitQuestion(question) {
+function submitQuestion(question, options = {}) {
   if (isAnswering) return;
   const trimmed = question.trim();
   if (!trimmed) return;
+  const source = options.source || "question_input";
   const resolvedQuestion = resolvePendingClarification(trimmed);
 
   setAnswerInputLocked(true);
   const userMessage = addMessage("user", trimmed, { status: "確認中..." });
   if (input) input.value = "";
   window.setTimeout(() => {
+    currentLogSource = source;
     answerQuestion(resolvedQuestion)
       .catch(() => addBotResponse(trimmed, barcodeUnavailableHtml, { html: true }))
       .finally(() => {
+        currentLogSource = "";
         setMessageStatus(userMessage, "");
         setAnswerInputLocked(false);
         input?.focus();
@@ -6646,7 +6769,7 @@ clearButton?.addEventListener("click", () => {
 
 samplePrompts.forEach((button) => {
   button.addEventListener("click", () => {
-    submitQuestion(button.dataset.samplePrompt || "");
+    submitQuestion(button.dataset.samplePrompt || "", { source: "sample_prompt" });
   });
 });
 

@@ -221,10 +221,27 @@ function getUnregisteredFailedLogs(logs, registeredRows, suppressedQuestions = n
   return logs.filter((log) => {
     const key = normalizeQuestionKey(log.question);
     if (!key || seen.has(key) || registeredQuestions.has(key) || suppressedQuestions.has(key)) return false;
+    if (!isQuestionInputLog(log)) return false;
     if (getBarcodeGenerationResult(log) !== "✖") return false;
     seen.add(key);
     return true;
   });
+}
+
+function isQuestionInputLog(log) {
+  const source = String(log.source || "").trim();
+  if (source === "question_input") return true;
+  if (source && source !== "unknown") return false;
+  return !isKnownToolGeneratedLog(log);
+}
+
+function isKnownToolGeneratedLog(log) {
+  const question = String(log.question || "").trim();
+  return [
+    "シンボル設定",
+    "シンボル設定 初期値バー",
+    "アウトプットシーケンス設定",
+  ].includes(question);
 }
 
 function renderUnregisteredLogs(logs) {
@@ -439,11 +456,21 @@ async function getRemoteChatLogs() {
   if (!supabase) return [];
 
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("chatbot_logs")
-      .select("created_at,question,answer")
+      .select("created_at,question,answer,source,barcode_generated")
       .order("created_at", { ascending: false })
       .limit(10000);
+
+    if (error && /source|barcode_generated/i.test(error.message || "")) {
+      const fallback = await supabase
+        .from("chatbot_logs")
+        .select("created_at,question,answer")
+        .order("created_at", { ascending: false })
+        .limit(10000);
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       setStatus(`Supabaseログを読み込めません。ローカルログを確認します: ${error.message}`);
@@ -454,6 +481,8 @@ async function getRemoteChatLogs() {
       createdAt: log.created_at,
       question: log.question,
       answer: log.answer,
+      source: log.source,
+      barcodeGenerated: log.barcode_generated,
     }));
   } catch (error) {
     setStatus(`Supabaseログを読み込めません。ローカルログを確認します: ${error.message || ""}`);
@@ -490,7 +519,7 @@ function getBarcodeGenerationResult(log) {
 
   const hasBarcodeSection = answer.includes("設定用バーコード");
   const hasSettingCommand = /DFM(?:BK3|DF3|DF|CL3)[A-Z0-9;|?.]*/i.test(answer);
-  return hasBarcodeSection && hasSettingCommand ? "〇" : "✖";
+  return hasBarcodeSection && hasSettingCommand ? "〇" : "－";
 }
 
 function isSettingCommandLog(log) {
