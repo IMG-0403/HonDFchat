@@ -1759,8 +1759,8 @@ function parseStructuredNlpRequest(query) {
   if (!structured.operation) {
     const deleteChars = findDeleteTargetCharacters(query);
     const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
-    const deleteFromMatch = normalizedQuery.match(/(?<!\d)(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
-    const deleteLeadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁/);
+    const deleteFromMatch = normalizedQuery.match(/(?<!\d)(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て|データ)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+    const deleteLeadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁(?!目)/);
     if (mentionsDelete && deleteChars.length > 0 && deleteFromMatch) {
       structured.operation = {
         type: "deleteFromPositionToEnd",
@@ -1789,14 +1789,14 @@ function parseStructuredNlpRequest(query) {
   }
 
   if (!structured.operation) {
-    const fromMatch = normalizedQuery.match(/(?<!\d)(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+    const fromMatch = normalizedQuery.match(/(?<!\d)(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て|データ)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
     if (fromMatch) {
       structured.operation = { type: "fromPositionToEnd", startPosition: Number(fromMatch[1]) };
     }
   }
 
   if (!structured.operation) {
-    const leadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁/);
+    const leadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁(?!目)/);
     if (leadingMatch && /(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) {
       structured.operation = { type: "leading", characterCount: Number(leadingMatch[1]) };
     }
@@ -2720,7 +2720,7 @@ function findTrailingDeleteCount(normalizedQuery) {
 
 function buildLeadingCharactersCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const match = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁/);
+  const match = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁(?!目)/);
 
   if (!match || !/(出力|送信|表示|取り出|切り出|のみ)/.test(normalizedQuery)) return null;
 
@@ -2856,7 +2856,7 @@ function buildPrefixValueSuffixControlCommand(query) {
 function buildPrefixValueThenFromPositionCommand(query) {
   const normalizedQuery = normalizeText(query);
   const prefixValues = findPrefixValueFilter(query);
-  const fromMatch = normalizedQuery.match(/(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+  const fromMatch = normalizedQuery.match(/(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て|データ)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
   if (!prefixValues || !fromMatch) return null;
 
   const startPosition = Number(fromMatch[1]);
@@ -2909,7 +2909,7 @@ function findPositionValueCondition(query) {
 function buildPositionValueThenFromPositionCommand(query) {
   const normalizedQuery = normalizeText(query);
   const condition = findPositionValueCondition(query);
-  const fromMatch = normalizedQuery.match(/(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+  const fromMatch = normalizedQuery.match(/(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て|データ)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
   if (!condition || !fromMatch) return null;
 
   const startPosition = Number(fromMatch[1]);
@@ -3074,7 +3074,7 @@ function buildRangeCharactersCommand(query) {
 
 function buildFromPositionToEndCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const match = normalizedQuery.match(/(?<!\d)(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+  const match = normalizedQuery.match(/(?<!\d)(\d{1,4})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て|データ)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
 
   if (!match || !/(出力|送信|表示|取り出|切り出)/.test(normalizedQuery)) return null;
 
@@ -4298,7 +4298,7 @@ function buildDeleteThenRangeCommand(query) {
 
 function buildDeleteThenLeadingCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const leadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁/);
+  const leadingMatch = normalizedQuery.match(/(?:先頭|最初)(?:から)?\s*(\d{1,4})\s*桁(?!目)/);
   const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
 
   if (!leadingMatch || !mentionsDelete || !/(出力|送信|表示|取り出|切り出|ください)/.test(normalizedQuery)) return null;
@@ -4346,7 +4346,7 @@ function buildDeleteThenLeadingCommand(query) {
 
 function buildDeleteThenFromPositionToEndCommand(query) {
   const normalizedQuery = normalizeText(query);
-  const fromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
+  const fromMatch = normalizedQuery.match(/(\d{1,2})\s*桁目\s*(?:以降|から\s*(?:(?:末尾|最後|全部|すべて|全て|データ)|(?=(?:を)?\s*(?:出力|送信|表示|取り出|切り出))))/);
   const mentionsDelete = ["削除", "除去", "消す", "消して"].some((word) => normalizedQuery.includes(normalizeText(word)));
 
   if (!fromMatch || !mentionsDelete || !/(出力|送信|表示|取り出|切り出|ください)/.test(normalizedQuery)) return null;
