@@ -3841,7 +3841,7 @@ function buildOutputControlDelayCommand(query) {
 
 function findMultiPositionControlInsertions(query) {
   const asciiQuery = normalizeAsciiText(query);
-  const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~](?![A-Za-z0-9])";
   const pattern = new RegExp(`(\\d{1,2})\\s*桁目\\s*(?:に|へ)?\\s*(${tokenPattern})\\s*(?:を)?\\s*(?:(\\d{1,2})\\s*(?:回|個))?\\s*(?:付加|追加|つける|付ける|挿入)?`, "gi");
   const insertions = [];
   let match;
@@ -4008,7 +4008,7 @@ function buildMultiPositionControlInsertCommand(query) {
   const normalizedQuery = normalizeText(query);
   const insertions = findMultiPositionControlInsertions(query);
   const mentionsOutput = /(出力|送信|表示|読み取り|読取)/.test(normalizedQuery);
-  if (insertions.length < 2 && !insertions.some((item) => item.count > 1)) return null;
+  if (insertions.length === 0) return null;
   if (!mentionsOutput) return null;
 
   let cursorPosition = 1;
