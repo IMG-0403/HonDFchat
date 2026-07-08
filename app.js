@@ -1633,6 +1633,8 @@ function buildSingleClauseCommand(clause) {
     buildPositionValueThenFromPositionCommand,
     buildPrefixValueThenFromPositionCommand,
     buildPrefixValueLeadingRangeCommand,
+    buildPrefixValueRepeatedB5Command,
+    buildPrefixValueRepeatedControlCommand,
     buildPrefixValueB5Command,
     findExactSpaceTransformCommand,
     buildDeleteThenLeadingCommand,
@@ -2899,6 +2901,100 @@ function buildPrefixValueB5Command(query) {
   };
 }
 
+function findRepeatedB5KeyInput(query) {
+  const asciiQuery = normalizeAsciiText(query);
+  const countMatch = asciiQuery.match(/(?:を)?\s*(\d{1,2})\s*(?:回|個)\s*(?:付加|追加|つける|付ける|挿入|入力)/i);
+  if (!countMatch) return null;
+
+  const count = Number(countMatch[1]);
+  if (!Number.isInteger(count) || count < 2 || count > 20) return null;
+
+  const key = findB5KeyForAppend(query);
+  if (!key) return null;
+
+  const modifier = getB5ModifierForAppend(query);
+  const command = `B501${modifier.hex}${key.hex}`;
+  return {
+    count,
+    command,
+    label: `${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key}`,
+  };
+}
+
+function buildPrefixValueRepeatedB5Command(query) {
+  const normalizedQuery = normalizeText(query);
+  const prefixValues = findPrefixValueFilter(query);
+  if (!prefixValues) return null;
+
+  const repeatedKey = findRepeatedB5KeyInput(query);
+  const noDataOutput = /(出力せず|出力しない|送信せず|送信しない|表示しない)/.test(normalizedQuery);
+  if (!repeatedKey || !noDataOutput) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const target = symbologyTargets.length === 1 ? symbologyTargets[0] : getSymbologyTargetLegacy(normalizedQuery);
+  if (!target || target.codeId === "99") return null;
+
+  const readLengths = getReadLengths(normalizedQuery);
+  const lengthField = readLengths.length === 1 ? String(readLengths[0]).padStart(4, "0") : "9999";
+  const repeatedCommand = repeatedKey.command.repeat(repeatedKey.count);
+  const blocks = prefixValues.map((value) => {
+    const compareCommand = [...value].map((char) => `FE${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`).join("");
+    return `0099${target.codeId}${lengthField}${compareCommand}${repeatedCommand}`;
+  });
+
+  return {
+    id: `df-generated-prefix-filter-repeated-b5-${target.codeId}-${lengthField}-${prefixValues.join("-")}-${repeatedKey.command}-${repeatedKey.count}`,
+    label: `${target.label}・先頭${prefixValues.join("、")}の場合 ${repeatedKey.label}キーを${repeatedKey.count}回入力`,
+    category: "登録例",
+    summary: `${target.label}を対象に、先頭文字列が${prefixValues.join("、")}に一致する場合だけ、読み取りデータは出力せず${repeatedKey.label}キーを${repeatedKey.count}回入力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(blocks),
+    skipGenerationValidation: true,
+    notes: [
+      `${target.codeId} は${target.label}、${lengthField} は${readLengths.length === 1 ? `${readLengths[0]}桁` : "全桁数"}を表す指定です。`,
+      "FE は現在位置の文字を比較し、一致した場合だけカーソルを進める指定です。",
+      `${repeatedKey.command} を${repeatedKey.count}回並べ、${repeatedKey.label}キーを${repeatedKey.count}回入力します。F100 を付けないため読み取りデータは出力しません。`,
+    ],
+  };
+}
+
+function buildPrefixValueRepeatedControlCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const prefixValues = findPrefixValueFilter(query);
+  if (!prefixValues) return null;
+
+  const insertion = findRepeatedSuffixControlInsertion(query);
+  const noDataOutput = /(出力せず|出力しない|送信せず|送信しない|表示しない)/.test(normalizedQuery);
+  if (!insertion || !noDataOutput) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const target = symbologyTargets.length === 1 ? symbologyTargets[0] : getSymbologyTargetLegacy(normalizedQuery);
+  if (!target || target.codeId === "99") return null;
+
+  const readLengths = getReadLengths(normalizedQuery);
+  const lengthField = readLengths.length === 1 ? String(readLengths[0]).padStart(4, "0") : "9999";
+  const insertCommand = `F4${insertion.hex}${String(insertion.count).padStart(2, "0")}`;
+  const blocks = prefixValues.map((value) => {
+    const compareCommand = [...value].map((char) => `FE${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`).join("");
+    return `0099${target.codeId}${lengthField}${compareCommand}${insertCommand}`;
+  });
+
+  return {
+    id: `df-generated-prefix-filter-repeated-control-${target.codeId}-${lengthField}-${prefixValues.join("-")}-${insertion.hex}-${insertion.count}`,
+    label: `${target.label}・先頭${prefixValues.join("、")}の場合 ${insertion.label}を${insertion.count}回入力`,
+    category: "登録例",
+    summary: `${target.label}を対象に、先頭文字列が${prefixValues.join("、")}に一致する場合だけ、読み取りデータは出力せず${insertion.label}を${insertion.count}回入力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(blocks),
+    skipGenerationValidation: true,
+    notes: [
+      `${target.codeId} は${target.label}、${lengthField} は${readLengths.length === 1 ? `${readLengths[0]}桁` : "全桁数"}を表す指定です。`,
+      "FE は現在位置の文字を比較し、一致した場合だけカーソルを進める指定です。",
+      `${insertCommand} は ${insertion.label} を${insertion.count}回入力する指定です。F100 を付けないため読み取りデータは出力しません。`,
+    ],
+  };
+}
+
 function hasSuffixCrRequest(query) {
   const normalizedQuery = normalizeText(query);
   return /(サフィックス|suffix|末尾|最後|後ろ).*(?:cr|enter|エンター|改行)|(?:cr|enter|エンター|改行).*(サフィックス|suffix|末尾|最後|後ろ)/i.test(normalizedQuery);
@@ -3916,7 +4012,7 @@ function findRepeatedSuffixControlInsertion(query) {
   const asciiQuery = normalizeAsciiText(query);
   if (/\d{1,2}\s*桁目/.test(asciiQuery)) return null;
   const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
-  const pattern = new RegExp(`(?:末尾|最後|データ末尾|サフィックス|suffix)?\\s*(${tokenPattern})\\s*(?:を)?\\s*(\\d{1,2})\\s*(?:回|個)\\s*(?:付加|追加|つける|付ける|挿入)`, "i");
+  const pattern = new RegExp(`(?:末尾|最後|データ末尾|サフィックス|suffix)?\\s*(${tokenPattern})\\s*(?:キー|key)?\\s*(?:を)?\\s*(\\d{1,2})\\s*(?:回|個)\\s*(?:付加|追加|つける|付ける|挿入|入力)`, "i");
   const match = asciiQuery.match(pattern);
   if (!match) return null;
 
@@ -6068,6 +6164,8 @@ function buildGeneratedCommandCandidate(question, intentUnderstanding = buildInt
     buildPositionValueThenFromPositionCommand,
     buildPrefixValueThenFromPositionCommand,
     buildPrefixValueLeadingRangeCommand,
+    buildPrefixValueRepeatedB5Command,
+    buildPrefixValueRepeatedControlCommand,
     buildPrefixValueB5Command,
     buildPrefixValueSuffixControlCommand,
     buildPrefixValueFilterCommand,
@@ -6186,6 +6284,8 @@ async function answerQuestion(question) {
   const positionValueThenFromPositionCommand = buildPositionValueThenFromPositionCommand(question);
   const prefixValueThenFromPositionCommand = buildPrefixValueThenFromPositionCommand(question);
   const prefixValueLeadingRangeCommand = buildPrefixValueLeadingRangeCommand(question);
+  const prefixValueRepeatedB5Command = buildPrefixValueRepeatedB5Command(question);
+  const prefixValueRepeatedControlCommand = buildPrefixValueRepeatedControlCommand(question);
   const prefixValueB5Command = buildPrefixValueB5Command(question);
   const prefixValueSuffixControlCommand = buildPrefixValueSuffixControlCommand(question);
   const prefixValueFilterCommand = buildPrefixValueFilterCommand(question);
@@ -6261,6 +6361,16 @@ async function answerQuestion(question) {
 
   if (prefixValueLeadingRangeCommand) {
     addBotResponse(originalQuestion, await commandHtml(prefixValueLeadingRangeCommand), { html: true });
+    return;
+  }
+
+  if (prefixValueRepeatedB5Command) {
+    addBotResponse(originalQuestion, await commandHtml(prefixValueRepeatedB5Command), { html: true });
+    return;
+  }
+
+  if (prefixValueRepeatedControlCommand) {
+    addBotResponse(originalQuestion, await commandHtml(prefixValueRepeatedControlCommand), { html: true });
     return;
   }
 
