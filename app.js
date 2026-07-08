@@ -1633,6 +1633,7 @@ function buildSingleClauseCommand(clause) {
     buildPositionValueThenFromPositionCommand,
     buildPrefixValueThenFromPositionCommand,
     buildPrefixValueLeadingRangeCommand,
+    buildPrefixValueB5Command,
     findExactSpaceTransformCommand,
     buildDeleteThenLeadingCommand,
     buildDeleteThenFromPositionToEndCommand,
