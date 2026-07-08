@@ -2763,7 +2763,7 @@ function findPrefixValueFilter(query) {
   if (!mentionsPrefix || !mentionsOnly || !mentionsOutput) return null;
 
   const asciiQuery = normalizeAsciiText(query);
-  const match = asciiQuery.match(/(?:先頭文字|先頭値|先頭コード|先頭)\s*(?:が|は|=|:|：)?\s*([A-Z0-9]{1,4}(?:\s*(?:、|,|，|\/|\+|&|and|と)\s*[A-Z0-9]{1,4})*)\s*(?=(?:の|が|は|のみ|だけ|限定|一致|時|とき|場合|なら|で|を|読取|読み取り|出力|送信|表示|$))/i);
+  const match = asciiQuery.match(/(?:先頭文字|先頭値|先頭コード|先頭データ|先頭)\s*(?:が|は|=|:|：)?\s*([A-Z0-9]{1,4}(?:\s*(?:、|,|，|\/|\+|&|and|と)\s*[A-Z0-9]{1,4})*)\s*(?=(?:の|が|は|のみ|だけ|限定|一致|時|とき|場合|なら|で|を|読取|読み取り|出力|送信|表示|$))/i);
   if (!match) return null;
 
   const values = [...new Set((match[1].match(/[A-Z0-9]{1,4}/gi) || []).map((value) => value.toUpperCase()))];
@@ -2850,6 +2850,50 @@ function buildPrefixValueSuffixControlCommand(query) {
       control.hex.length === 2
         ? `F7${insertCommand} は比較後にカーソルを先頭へ戻し、読み取りデータ全体を出力して末尾に ${control.label} を付加する指定です。`
         : `F7F100${insertCommand} は比較後にカーソルを先頭へ戻し、読み取りデータ全体を出力して末尾に ${control.label} を付加する指定です。`,
+    ],
+  };
+}
+
+function buildPrefixValueB5Command(query) {
+  const normalizedQuery = normalizeText(query);
+  const asciiQuery = normalizeAsciiText(query);
+  const prefixValues = findPrefixValueFilter(query);
+  if (!prefixValues) return null;
+
+  const mentionsKeyInput = /(キー入力|キー|key|ファンクションキー|function\s*key)/i.test(asciiQuery);
+  const mentionsAppend = settingAppendWords.some((word) => normalizedQuery.includes(normalizeText(word))) || mentionsKeyInput;
+  if (!mentionsAppend || hasPlainTextAppendTarget(query)) return null;
+
+  const key = findB5KeyForAppend(query);
+  const modifier = getB5ModifierForAppend(query);
+  const mentionsModifier = ["ctrl", "control", "コントロール", "alt", "shift"].some((word) => normalizedQuery.includes(normalizeText(word)));
+  if (!key && !mentionsModifier) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const target = symbologyTargets.length === 1 ? symbologyTargets[0] : getSymbologyTargetLegacy(normalizedQuery);
+  if (!target || target.codeId === "99") return null;
+
+  const readLengths = getReadLengths(normalizedQuery);
+  const lengthField = readLengths.length === 1 ? String(readLengths[0]).padStart(4, "0") : "9999";
+  const keystrokeCommand = key ? `B501${modifier.hex}${key.hex}` : "B5012040";
+  const keystrokeLabel = key ? `${modifier.hex === "00" ? "" : `${modifier.label}+`}${key.key}` : "CTRL";
+  const blocks = prefixValues.map((value) => {
+    const compareCommand = [...value].map((char) => `FE${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`).join("");
+    return `0099${target.codeId}${lengthField}${compareCommand}${keystrokeCommand}`;
+  });
+
+  return {
+    id: `df-generated-prefix-filter-b5-${target.codeId}-${lengthField}-${prefixValues.join("-")}-${keystrokeCommand}`,
+    label: `${target.label}・先頭${prefixValues.join("、")}の場合 ${keystrokeLabel}キー入力`,
+    category: "登録例",
+    summary: `${target.label}を対象に、先頭文字列が${prefixValues.join("、")}に一致する場合だけ、${keystrokeLabel}キーを入力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(blocks),
+    skipGenerationValidation: true,
+    notes: [
+      `${target.codeId} は${target.label}、${lengthField} は${readLengths.length === 1 ? `${readLengths[0]}桁` : "全桁数"}を表す指定です。`,
+      "FE は現在位置の文字を比較し、一致した場合だけカーソルを進める指定です。",
+      `${keystrokeCommand} は ${keystrokeLabel} キー入力の指定です。B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。`,
     ],
   };
 }
@@ -6023,6 +6067,7 @@ function buildGeneratedCommandCandidate(question, intentUnderstanding = buildInt
     buildPositionValueThenFromPositionCommand,
     buildPrefixValueThenFromPositionCommand,
     buildPrefixValueLeadingRangeCommand,
+    buildPrefixValueB5Command,
     buildPrefixValueSuffixControlCommand,
     buildPrefixValueFilterCommand,
     buildOutputControlDelayCommand,
@@ -6140,6 +6185,7 @@ async function answerQuestion(question) {
   const positionValueThenFromPositionCommand = buildPositionValueThenFromPositionCommand(question);
   const prefixValueThenFromPositionCommand = buildPrefixValueThenFromPositionCommand(question);
   const prefixValueLeadingRangeCommand = buildPrefixValueLeadingRangeCommand(question);
+  const prefixValueB5Command = buildPrefixValueB5Command(question);
   const prefixValueSuffixControlCommand = buildPrefixValueSuffixControlCommand(question);
   const prefixValueFilterCommand = buildPrefixValueFilterCommand(question);
   const outputControlDelayCommand = buildOutputControlDelayCommand(question);
@@ -6214,6 +6260,11 @@ async function answerQuestion(question) {
 
   if (prefixValueLeadingRangeCommand) {
     addBotResponse(originalQuestion, await commandHtml(prefixValueLeadingRangeCommand), { html: true });
+    return;
+  }
+
+  if (prefixValueB5Command) {
+    addBotResponse(originalQuestion, await commandHtml(prefixValueB5Command), { html: true });
     return;
   }
 
