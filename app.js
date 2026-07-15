@@ -1481,6 +1481,7 @@ function getReadLengths(normalizedQuery) {
   const explicitLengthPatterns = [
     /(?:桁数|読取桁数|読み取り桁数|長さ|length)\s*(?:指定|条件)?\s*[:：]?\s*(?<![a-z0-9])(\d{1,4})\s*桁/g,
     /(?<![a-z0-9])(\d{1,4})\s*桁\s*(?:指定|の指定|条件)/g,
+    /(?:桁数|読取桁数|読み取り桁数|長さ|length)\s*(?:が|は|=|:|：)\s*(\d{4})(?=\s*(?:の?とき|の場合|なら|で|、|,|$))/g,
   ];
   for (const pattern of explicitLengthPatterns) {
     while ((match = pattern.exec(normalizedQuery)) !== null) {
@@ -2760,13 +2761,21 @@ function buildLeadingCharactersCommand(query) {
 
 function findPrefixValueFilter(query) {
   const normalizedQuery = normalizeText(query);
-  const mentionsPrefix = /(先頭文字|先頭値|先頭コード|先頭|prefix)/i.test(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const isSingleCharacterDataCondition = readLengths.length === 1 && readLengths[0] === 1 &&
+    /(?:読み取りデータ|読取データ|データ|値)\s*(?:が|は|=|:|：)/.test(normalizedQuery);
+  const mentionsPrefix = /(先頭文字|先頭値|先頭コード|先頭|prefix)/i.test(normalizedQuery) || isSingleCharacterDataCondition;
   const mentionsOnly = /(のみ|だけ|限定|一致|場合|時|とき|始まる|はじまる|開始)/.test(normalizedQuery);
-  const mentionsOutput = /(読取出力|読み取り出力|読み取り|読取|出力|送信|表示)/.test(normalizedQuery);
+  const mentionsOutput = /(読取出力|読み取り出力|読み取り|読取|出力|送信|表示)/.test(normalizedQuery) ||
+    (isSingleCharacterDataCondition && /(?:キー|key)/i.test(normalizedQuery));
   if (!mentionsPrefix || !mentionsOnly || !mentionsOutput) return null;
 
   const asciiQuery = normalizeAsciiText(query);
-  const match = asciiQuery.match(/(?:先頭文字|先頭値|先頭コード|先頭データ|先頭)\s*(?:が|は|=|:|：)?\s*([A-Z0-9]{1,4}(?:\s*(?:、|,|，|\/|\+|&|and|と)\s*[A-Z0-9]{1,4})*)\s*(?=(?:の|が|は|のみ|だけ|限定|一致|時|とき|場合|なら|で|を|読取|読み取り|出力|送信|表示|$))/i);
+  const explicitPrefixMatch = asciiQuery.match(/(?:先頭文字|先頭値|先頭コード|先頭データ|先頭)\s*(?:が|は|=|:|：)?\s*([A-Z0-9]{1,4}(?:\s*(?:、|,|，|\/|\+|&|and|と)\s*[A-Z0-9]{1,4})*)\s*(?=(?:の|が|は|のみ|だけ|限定|一致|時|とき|場合|なら|で|を|読取|読み取り|出力|送信|表示|$))/i);
+  const singleCharacterDataMatch = isSingleCharacterDataCondition
+    ? asciiQuery.match(/(?:読み取りデータ|読取データ|データ|値)\s*(?:が|は|=|:|：)\s*([A-Z0-9])\s*(?=(?:の|が|は|のみ|だけ|限定|一致|時|とき|場合|なら|で|を|読取|読み取り|出力|送信|表示|$))/i)
+    : null;
+  const match = explicitPrefixMatch || singleCharacterDataMatch;
   if (!match) return null;
 
   const values = [...new Set((match[1].match(/[A-Z0-9]{1,4}/gi) || []).map((value) => value.toUpperCase()))];
@@ -2897,6 +2906,53 @@ function buildPrefixValueB5Command(query) {
       `${target.codeId} は${target.label}、${lengthField} は${readLengths.length === 1 ? `${readLengths[0]}桁` : "全桁数"}を表す指定です。`,
       "FE は現在位置の文字を比較し、一致した場合だけカーソルを進める指定です。",
       `${keystrokeCommand} は ${keystrokeLabel} キー入力の指定です。B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。`,
+    ],
+  };
+}
+
+function buildSingleCharacterValueKeyMappingsCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const asciiQuery = normalizeAsciiText(query);
+  const readLengths = getReadLengths(normalizedQuery);
+  if (readLengths.length !== 1 || readLengths[0] !== 1) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const target = symbologyTargets.length === 1 ? symbologyTargets[0] : getSymbologyTargetLegacy(normalizedQuery);
+  if (!target || target.codeId === "99") return null;
+
+  const mappings = [];
+  const mappingPattern = /(?:先頭データ|読み取りデータ|読取データ|データ|値)\s*(?:が|は|=|:|：)\s*([A-Z0-9])\s*(?:の場合|のとき|の時|なら|時|とき)\s*[、,]?\s*(?:読み取りデータは出力せず\s*)?(F(?:1[0-2]|[1-9]))\s*(?:キー|key)(?:入力|を入力|設定)?/gi;
+  let match;
+  while ((match = mappingPattern.exec(asciiQuery)) !== null) {
+    const value = match[1].toUpperCase();
+    const keyName = match[2].toUpperCase();
+    const key = b5KeyMapTable.find((item) => item.key === keyName);
+    if (!key) continue;
+    mappings.push({ value, key });
+  }
+
+  if (mappings.length < 2) return null;
+
+  const uniqueMappings = [...new Map(mappings.map((mapping) => [mapping.value, mapping])).values()];
+  const lengthField = "0001";
+  const blocks = uniqueMappings.map(({ value, key }) => {
+    const valueHex = stringToAsciiHex(value);
+    return `0099${target.codeId}${lengthField}FE${valueHex}B50100${key.hex}`;
+  });
+
+  return {
+    id: `df-generated-single-character-key-map-${target.codeId}-${uniqueMappings.map(({ value, key }) => `${value}-${key.key}`).join("-")}`,
+    label: `${target.label}・1桁データ別キー入力`,
+    category: "登録例",
+    summary: `${target.label}の1桁読み取りを対象に、${uniqueMappings.map(({ value, key }) => `データが${value}の場合は${key.key}`).join("、")}キーを入力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromBlocks(blocks),
+    skipGenerationValidation: true,
+    notes: [
+      `${target.codeId} は${target.label}、0001 は1桁読み取りを表す指定です。1桁データなので、データ値を先頭データとして比較します。`,
+      "FE は現在位置の1文字を比較し、一致した場合だけカーソルを進める指定です。",
+      ...uniqueMappings.map(({ value, key }) => `データが ${value} の場合、B50100${key.hex} で ${key.key} キーを入力します。`),
+      "B5コマンドはUSB-HID使用時のみ有効です。RS232CやUSB-COMインターフェイス設定では使用できません。",
     ],
   };
 }
@@ -6156,6 +6212,7 @@ function buildFirstCommandCandidate(question, intentUnderstanding = buildIntentU
 
 function buildGeneratedCommandCandidate(question, intentUnderstanding = buildIntentUnderstanding(question)) {
   const builders = [
+    buildSingleCharacterValueKeyMappingsCommand,
     buildMultiClauseCommand,
     buildReplaceThenRangeCommand,
     buildReplaceThenDeleteCommand,
