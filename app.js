@@ -4114,17 +4114,34 @@ function findSegmentedSendInsertSequence(query) {
   const tokenPattern = "TAB|タブ|HT|CR|ENTER|エンター|SP|SPACE|スペース|空白|ESC|エスケープ|BS|バックスペース|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
   const segments = asciiQuery.split(/\s*(?:、|,|，|\n)\s*/).map((segment) => segment.trim()).filter(Boolean);
   const steps = [];
+  const positionPrefix = "(?:\\d{1,2}\\s*桁目\\s*(?:に|へ)?\\s*)?";
+  const insertPattern = new RegExp(`^\\s*${positionPrefix}(${tokenPattern})\\s*(?:(\\d{1,2})\\s*(?:回|個))?\\s*(?:を)?\\s*(?:挿入|付加|追加|つける|付ける)`, "i");
+
+  // A sequence may start by inserting a character before any source data is sent,
+  // for example "1桁目に(挿入、2桁データ出力して、3桁目に)挿入".
+  // Keep that leading insertion separate because F2 represents "send, then insert".
+  const firstSendSegment = segments.findIndex((segment) => /(\d{1,2})\s*桁\s*(?:の?\s*)?(?:読み取り)?データ\s*(?:を)?\s*(?:送信|出力|表示)|\d{1,2}\s*桁\s*(?:を)?\s*(?:送信|出力|表示)/.test(segment));
+  const leadingInsertions = [];
+  if (firstSendSegment > 0) {
+    for (let index = 0; index < firstSendSegment; index += 1) {
+      const leadingMatch = segments[index].match(new RegExp(`${positionPrefix}(${tokenPattern})\\s*(?:(\\d{1,2})\\s*(?:回|個))?\\s*(?:を)?\\s*(?:挿入|付加|追加|つける|付ける)`, "i"));
+      if (!leadingMatch) continue;
+      const insertion = normalizeInsertControlToken(leadingMatch[1]);
+      const insertCount = leadingMatch[2] ? Number(leadingMatch[2]) : 1;
+      if (!insertion || !Number.isInteger(insertCount) || insertCount < 1 || insertCount > 99) return [];
+      leadingInsertions.push({ insertCount, ...insertion });
+    }
+  }
 
   for (let index = 0; index < segments.length - 1; index += 1) {
-    const countMatch = segments[index].match(/(\d{1,2})\s*桁\s*(?:を)?\s*(?:送信|出力|表示)/);
+    const countMatch = segments[index].match(/(\d{1,2})\s*桁\s*(?:の?\s*)?(?:読み取り)?データ\s*(?:を)?\s*(?:送信|出力|表示)|(\d{1,2})\s*桁\s*(?:を)?\s*(?:送信|出力|表示)/);
     if (!countMatch) continue;
 
-    const insertPattern = new RegExp(`^\\s*(${tokenPattern})\\s*(?:(\\d{1,2})\\s*(?:回|個))?\\s*(?:を)?\\s*(?:挿入|付加|追加|つける|付ける)`, "i");
     const insertMatch = segments[index + 1].match(insertPattern);
     if (!insertMatch) continue;
 
     const insertion = normalizeInsertControlToken(insertMatch[1]);
-    const count = Number(countMatch[1]);
+    const count = Number(countMatch[1] || countMatch[2]);
     const insertCount = insertMatch[2] ? Number(insertMatch[2]) : 1;
     if (!insertion || !Number.isInteger(count) || count < 1 || count > 99) return [];
     if (!Number.isInteger(insertCount) || insertCount < 1 || insertCount > 99) return [];
@@ -4146,6 +4163,7 @@ function findSegmentedSendInsertSequence(query) {
   }
 
   if (!mentionsRemainder && steps.length < 2) return [];
+  steps.leadingInsertions = leadingInsertions;
   return steps;
 }
 
@@ -4155,13 +4173,16 @@ function hasSegmentedSendInsertRemainder(query) {
 }
 
 function buildSegmentedSendInsertEditorCommand(steps, includeRemainder = false) {
+  const leadingParts = (steps.leadingInsertions || []).map((insertion) =>
+    `F4${insertion.hex}${String(insertion.insertCount || 1).padStart(2, "0")}`
+  );
   const parts = steps.map((step) => {
     const sendCount = String(step.count).padStart(2, "0");
     const insertCount = step.insertCount || 1;
     if (insertCount > 1) return `F2${sendCount}00F4${step.hex}${String(insertCount).padStart(2, "0")}`;
     return `F2${sendCount}${step.hex}`;
   });
-  return `${parts.join("")}${includeRemainder ? "F100" : ""}`;
+  return `${leadingParts.join("")}${parts.join("")}${includeRemainder ? "F100" : ""}`;
 }
 
 function buildSegmentedSendInsertCommand(query) {
@@ -4179,17 +4200,21 @@ function buildSegmentedSendInsertCommand(query) {
   const lengthNote = readLengths.length > 0
     ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
     : "9999 は全桁数を表す指定です。";
+  const leadingInsertions = steps.leadingInsertions || [];
+  const leadingLabel = leadingInsertions.map((item) => `先頭に${item.label}${item.insertCount > 1 ? `${item.insertCount}個` : ""}`).join("、");
   const stepLabel = steps.map((step) => `${step.count}桁送信後に${step.label}${step.insertCount > 1 ? `${step.insertCount}個` : ""}`).join("、");
+  const operationLabel = [leadingLabel, stepLabel].filter(Boolean).join("、");
 
   return {
     id: `df-generated-segmented-send-insert-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}-${editorCommand}`,
-    label: `${codeLabel}・${lengthLabel} ${stepLabel}を挿入`,
+    label: `${codeLabel}・${lengthLabel} ${operationLabel}を挿入`,
     category: "登録例",
-    summary: `${codeLabel}を対象に、${stepLabel}を挿入して出力します。`,
+    summary: `${codeLabel}を対象に、${operationLabel}を挿入して出力します。`,
     keywords: [],
     command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      ...leadingInsertions.map((item) => `F4${item.hex}${String(item.insertCount).padStart(2, "0")} で現在位置に${item.label}を${item.insertCount}個付加します。`),
       ...steps.map((step) => {
         if (step.insertCount > 1) {
           return `F2${String(step.count).padStart(2, "0")}00 は現在位置から${step.count}桁を送信し、F4${step.hex}${String(step.insertCount).padStart(2, "0")} で${step.label}を${step.insertCount}個追加する指定です。`;
