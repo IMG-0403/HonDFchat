@@ -280,11 +280,178 @@ h2 {
 
 .chat-area {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   min-width: 0;
   min-height: 0;
   border-radius: 8px;
   overflow: hidden;
+}
+
+.data-compare-builder {
+  border-bottom: 1px solid var(--line);
+  background: rgba(238, 244, 242, 0.72);
+}
+
+.data-compare-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+}
+
+.data-compare-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.data-compare-body {
+  display: grid;
+  gap: 10px;
+  max-height: min(52vh, 520px);
+  padding: 0 20px 16px;
+  overflow: auto;
+}
+
+.data-compare-targets {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(180px, 1.2fr) minmax(210px, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.data-compare-targets > label:not(.data-compare-length-option),
+.data-compare-fields label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.data-compare-targets select,
+.data-compare-fields textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+}
+
+.data-compare-targets select {
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.data-compare-targets select[multiple] {
+  min-height: 118px;
+  padding: 6px;
+}
+
+.data-compare-fields textarea {
+  min-height: 76px;
+  padding: 9px 10px;
+  resize: vertical;
+  font-family: Consolas, "Yu Gothic UI", monospace;
+  line-height: 1.45;
+}
+
+.data-compare-targets select:focus,
+.data-compare-fields textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.data-compare-length-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.data-compare-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.data-compare-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.data-compare-help code {
+  color: var(--accent-dark);
+  font-family: Consolas, monospace;
+  font-weight: 800;
+}
+
+.data-compare-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.data-compare-status {
+  flex: 1 1 auto;
+  color: var(--warning);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.data-compare-actions button {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 800;
+}
+
+.data-compare-actions button:hover,
+.data-compare-actions button:focus-visible {
+  background: var(--accent-dark);
+  outline: none;
+}
+
+.comparison-result {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.comparison-result strong,
+.comparison-result p {
+  margin: 0;
+}
+
+.comparison-result ul {
+  margin: 0;
+  padding-left: 1.3rem;
+}
+
+.comparison-simulation {
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--surface-strong);
+  font-family: Consolas, "Yu Gothic UI", monospace;
+  overflow-wrap: anywhere;
 }
 
 .chat-header {
@@ -1481,6 +1648,14 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .data-compare-targets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .data-compare-length-option {
+    grid-column: 1 / -1;
+  }
+
   .mobile-link {
     display: none;
   }
@@ -1516,8 +1691,16 @@ h2 {
   }
 
   .sequence-grid,
-  .sequence-mode-row {
+  .sequence-mode-row,
+  .data-compare-targets,
+  .data-compare-fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .data-compare-header,
+  .data-compare-body {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .composer {

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>HON DATA FORMAT</title>
-    <link rel="stylesheet" href="styles.css?v=20260601-03" />
+    <link rel="stylesheet" href="styles.css?v=20260903-01" />
   </head>
   <body>
     <main class="app-shell">
@@ -182,6 +182,54 @@
           <a class="mobile-link" href="mobile.html">スマートフォン表示</a>
         </header>
 
+        <section class="data-compare-builder" id="dataCompareBuilder" aria-label="試験版 データ比較から作成">
+          <div class="data-compare-header">
+            <div>
+              <p class="eyebrow">EXPERIMENTAL</p>
+              <h3>試験版：データ比較から作成</h3>
+            </div>
+            <button class="sequence-toggle" id="dataCompareToggle" type="button" aria-expanded="false" aria-controls="dataCompareBody">
+              開く
+            </button>
+          </div>
+          <form class="data-compare-body" id="dataCompareForm" hidden>
+            <div class="data-compare-targets">
+              <label>
+                対象コード
+                <select id="dataCompareTargetMode">
+                  <option value="all">全てのコード</option>
+                  <option value="single" selected>単体</option>
+                  <option value="multiple">複数</option>
+                </select>
+              </label>
+              <label>
+                コード種
+                <select id="dataCompareSymbologies" aria-describedby="dataCompareSymbologyHelp"></select>
+              </label>
+              <label class="data-compare-length-option">
+                <input id="dataCompareExactLength" type="checkbox" checked />
+                <span>入力データの桁数を条件にする</span>
+              </label>
+            </div>
+            <p class="data-compare-help" id="dataCompareSymbologyHelp">複数選択では Ctrl キーを押しながらコード種を選択してください。</p>
+            <div class="data-compare-fields">
+              <label>
+                バーコードデータ
+                <textarea id="dataCompareSource" rows="3" spellcheck="false" placeholder="例: 01123456789012341725010110ABC"></textarea>
+              </label>
+              <label>
+                希望データ出力結果
+                <textarea id="dataCompareExpected" rows="3" spellcheck="false" placeholder="例: (01)12345678901234(17)250101(10)ABC[ENTER]"></textarea>
+              </label>
+            </div>
+            <p class="data-compare-help"><code>[ENTER]</code>、<code>[TAB*2]</code> で制御文字を付加し、<code>{A-&gt;B}</code> で文字を置換します。通常の <code>[</code> や <code>{</code> は直前に <code>\</code> を付けます。</p>
+            <div class="data-compare-actions">
+              <span class="data-compare-status" id="dataCompareStatus" role="status" aria-live="polite"></span>
+              <button type="submit" id="generateDataCompareCommand">設定作成</button>
+            </div>
+          </form>
+        </section>
+
         <div class="messages" id="messages" role="log" aria-live="polite"></div>
 
         <form class="composer" id="chatForm">
@@ -209,6 +257,6 @@
     </template>
 
     <script src="config.js"></script>
-    <script src="app.js?v=20260609-05"></script>
+    <script src="app.js?v=20260903-01"></script>
   </body>
 </html>

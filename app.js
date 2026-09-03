@@ -1264,6 +1264,15 @@ const addSequenceItemButton = document.querySelector("#addSequenceItem");
 const generateSequenceCommandButton = document.querySelector("#generateSequenceCommand");
 const sequenceModeSelect = document.querySelector("#sequenceMode");
 const appendSequenceToDataFormatInput = document.querySelector("#appendSequenceToDataFormat");
+const dataCompareToggle = document.querySelector("#dataCompareToggle");
+const dataCompareBody = document.querySelector("#dataCompareBody");
+const dataCompareForm = document.querySelector("#dataCompareForm");
+const dataCompareTargetMode = document.querySelector("#dataCompareTargetMode");
+const dataCompareSymbologies = document.querySelector("#dataCompareSymbologies");
+const dataCompareExactLength = document.querySelector("#dataCompareExactLength");
+const dataCompareSource = document.querySelector("#dataCompareSource");
+const dataCompareExpected = document.querySelector("#dataCompareExpected");
+const dataCompareStatus = document.querySelector("#dataCompareStatus");
 let adminClickCount = 0;
 let adminClickTimer = 0;
 let pendingClarification = null;
@@ -1446,6 +1455,303 @@ function getSymbologyTargetLegacy(normalizedQuery) {
 
 function buildDataFormatCommandFromBlocks(blocks) {
   return blocks.map((block, index) => (index === 0 ? `DFMBK3${block}` : block)).join("|") + ".";
+}
+
+function getComparisonControlToken(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  const characterControls = {
+    TAB: { label: "TAB", hex: "09" },
+    HT: { label: "TAB", hex: "09" },
+    ENTER: { label: "ENTER", hex: "0D" },
+    CR: { label: "CR", hex: "0D" },
+    LF: { label: "LF", hex: "0A" },
+    CRLF: { label: "CRLF", hex: "0D0A" },
+    GS: { label: "GS", hex: "1D" },
+    FNC1: { label: "GS", hex: "1D" },
+    ESC: { label: "ESC", hex: "1B" },
+    BS: { label: "BS", hex: "08" },
+    SPACE: { label: "SPACE", hex: "20" },
+  };
+  if (characterControls[normalized]) {
+    return { type: "control", ...characterControls[normalized] };
+  }
+
+  if (normalized === "CTRL" || normalized === "CONTROL") {
+    return { type: "keystroke", label: "CTRL", command: "B5012040" };
+  }
+
+  const keyName = normalized.split("+").at(-1);
+  const key = b5KeyMapTable.find((item) => item.key.toUpperCase() === keyName);
+  if (!key) return null;
+
+  const modifiers = normalized.split("+").slice(0, -1);
+  if (modifiers.some((modifier) => !["CTRL", "CONTROL", "SHIFT", "ALT"].includes(modifier))) return null;
+  const uniqueModifiers = [...new Set(modifiers.map((modifier) => modifier === "CONTROL" ? "CTRL" : modifier))];
+  const supportedCombination = uniqueModifiers.length <= 1 ||
+    (uniqueModifiers.length === 2 && uniqueModifiers.includes("CTRL") && (uniqueModifiers.includes("SHIFT") || uniqueModifiers.includes("ALT")));
+  if (!supportedCombination) return null;
+
+  const modifier = getB5ModifierForAppend(uniqueModifiers.join("+"));
+  const label = [...uniqueModifiers, key.key].join("+");
+  return { type: "keystroke", label, command: `B501${modifier.hex}${key.hex}` };
+}
+
+function getComparisonReplacementCharacter(value) {
+  const raw = String(value ?? "");
+  const normalized = raw.trim().toUpperCase();
+  const named = {
+    SPACE: " ",
+    TAB: "\x09",
+    HT: "\x09",
+    ENTER: "\x0D",
+    CR: "\x0D",
+    LF: "\x0A",
+    GS: "\x1D",
+    FNC1: "\x1D",
+    ESC: "\x1B",
+    BS: "\x08",
+  };
+  if (Object.hasOwn(named, normalized)) return named[normalized];
+  if (Array.from(raw).length === 1) return raw;
+  if (Array.from(raw.trim()).length === 1) return raw.trim();
+  return "";
+}
+
+function parseDataComparisonPattern(pattern) {
+  const text = String(pattern ?? "");
+  const tokens = [];
+  const replacements = [];
+
+  for (let index = 0; index < text.length;) {
+    const character = text[index];
+    if (character === "\\" && index + 1 < text.length && "[]{}\\".includes(text[index + 1])) {
+      tokens.push({ type: "character", value: text[index + 1] });
+      index += 2;
+      continue;
+    }
+
+    if (character === "{") {
+      const end = text.indexOf("}", index + 1);
+      if (end < 0) return { ok: false, error: "置換指定の } がありません。" };
+      const directive = text.slice(index + 1, end);
+      const arrowIndex = directive.indexOf("->");
+      if (arrowIndex < 0 || directive.indexOf("->", arrowIndex + 2) >= 0) {
+        return { ok: false, error: `置換指定 {${directive}} は {A->B} の形式で入力してください。` };
+      }
+      const sourceChar = getComparisonReplacementCharacter(directive.slice(0, arrowIndex));
+      const targetChar = getComparisonReplacementCharacter(directive.slice(arrowIndex + 2));
+      if (!sourceChar || !targetChar) {
+        return { ok: false, error: "置換元と置換先は、それぞれ1文字で指定してください。" };
+      }
+      if (sourceChar.charCodeAt(0) > 0xFF || targetChar.charCodeAt(0) > 0xFF) {
+        return { ok: false, error: "試験版の置換には1バイト文字を指定してください。" };
+      }
+      if (replacements.some((item) => item.sourceChar === sourceChar)) {
+        return { ok: false, error: `置換元 ${describeReplaceCharacter(sourceChar)} が重複しています。` };
+      }
+      replacements.push({ sourceChar, targetChar });
+      index = end + 1;
+      continue;
+    }
+
+    if (character === "[") {
+      const end = text.indexOf("]", index + 1);
+      if (end < 0) return { ok: false, error: "制御文字指定の ] がありません。" };
+      const directive = text.slice(index + 1, end).trim();
+      const countMatch = directive.match(/^(.*?)(?:\*(\d{1,2}))?$/);
+      const count = Number(countMatch?.[2] || 1);
+      const control = getComparisonControlToken(countMatch?.[1] || "");
+      if (!control) return { ok: false, error: `制御文字 [${directive}] には対応していません。` };
+      if (!Number.isInteger(count) || count < 1 || count > 99) {
+        return { ok: false, error: "制御文字の繰り返し回数は1～99で指定してください。" };
+      }
+      tokens.push({ ...control, count });
+      index = end + 1;
+      continue;
+    }
+
+    tokens.push({ type: "character", value: character });
+    index += 1;
+  }
+
+  return { ok: true, tokens, replacements };
+}
+
+function applyComparisonReplacements(source, replacements) {
+  const replacementMap = new Map(replacements.map((item) => [item.sourceChar, item.targetChar]));
+  return Array.from(source).map((character) => replacementMap.get(character) ?? character).join("");
+}
+
+function comparisonTokenToDisplay(token) {
+  if (token.type === "character") return token.value;
+  const countLabel = token.count > 1 ? `*${token.count}` : "";
+  return `[${token.label}${countLabel}]`;
+}
+
+function appendComparisonOperation(operations, operation) {
+  const previous = operations.at(-1);
+  if (operation.type === "send" && previous?.type === "send") {
+    previous.count += operation.count;
+    return;
+  }
+  if (operation.type === "insertText" && previous?.type === "insertText") {
+    previous.text += operation.text;
+    return;
+  }
+  operations.push(operation);
+}
+
+function buildComparisonOperations(transformedSource, expectedTokens) {
+  const sourceCharacters = Array.from(transformedSource);
+  const operations = [];
+  let sourceIndex = 0;
+
+  for (const token of expectedTokens) {
+    if (token.type === "character" && token.value === sourceCharacters[sourceIndex]) {
+      appendComparisonOperation(operations, { type: "send", count: 1 });
+      sourceIndex += 1;
+      continue;
+    }
+    if (token.type === "character") {
+      if (token.value.charCodeAt(0) > 0xFF) {
+        return { ok: false, error: `挿入文字「${token.value}」は試験版では使用できません。` };
+      }
+      appendComparisonOperation(operations, { type: "insertText", text: token.value });
+      continue;
+    }
+    operations.push({ type: "insertControl", token });
+  }
+
+  if (sourceIndex !== sourceCharacters.length) {
+    const remaining = sourceCharacters.slice(sourceIndex).join("");
+    return {
+      ok: false,
+      error: `希望出力から元データの一部（${remaining.slice(0, 12)}${remaining.length > 12 ? "…" : ""}）が見つかりません。試験版は挿入と {A->B} 置換に対応しています。`,
+    };
+  }
+  return { ok: true, operations };
+}
+
+function encodeComparisonSend(count, sendRemainder = false) {
+  if (sendRemainder) return "F100";
+  const commands = [];
+  let remaining = count;
+  while (remaining > 0) {
+    const chunk = Math.min(remaining, 99);
+    commands.push(`F2${String(chunk).padStart(2, "0")}00`);
+    remaining -= chunk;
+  }
+  return commands.join("");
+}
+
+function buildComparisonEditorCommand(replacements, operations) {
+  const parts = [];
+  if (replacements.length > 0) parts.push(buildReplaceEditorCommand(replacements, ""));
+
+  operations.forEach((operation, index) => {
+    if (operation.type === "send") {
+      parts.push(encodeComparisonSend(operation.count, index === operations.length - 1));
+      return;
+    }
+    if (operation.type === "insertText") {
+      const characters = Array.from(operation.text);
+      parts.push(`BA${String(characters.length).padStart(4, "0")}${charsToHex(characters)}`);
+      return;
+    }
+
+    const { token } = operation;
+    if (token.type === "keystroke") {
+      parts.push(Array(token.count).fill(token.command).join(""));
+    } else if (token.hex.length === 2) {
+      parts.push(`F4${token.hex}${String(token.count).padStart(2, "0")}`);
+    } else {
+      const repeatedHex = token.hex.repeat(token.count);
+      parts.push(`BA${String(repeatedHex.length / 2).padStart(4, "0")}${repeatedHex}`);
+    }
+  });
+
+  return parts.join("") || "F100";
+}
+
+function simulateComparisonOperations(transformedSource, operations) {
+  const sourceCharacters = Array.from(transformedSource);
+  const output = [];
+  let sourceIndex = 0;
+  operations.forEach((operation) => {
+    if (operation.type === "send") {
+      output.push(sourceCharacters.slice(sourceIndex, sourceIndex + operation.count).join(""));
+      sourceIndex += operation.count;
+    } else if (operation.type === "insertText") {
+      output.push(operation.text);
+    } else {
+      output.push(comparisonTokenToDisplay(operation.token));
+    }
+  });
+  return output.join("");
+}
+
+function describeComparisonOperations(replacements, operations) {
+  const descriptions = replacements.map((item) =>
+    `${describeReplaceCharacter(item.sourceChar)}を${describeReplaceCharacter(item.targetChar)}へ置換`
+  );
+  operations.forEach((operation) => {
+    if (operation.type === "send") descriptions.push(`データを${operation.count}桁出力`);
+    if (operation.type === "insertText") descriptions.push(`「${operation.text}」を挿入`);
+    if (operation.type === "insertControl") {
+      descriptions.push(`${operation.token.label}${operation.token.count > 1 ? `を${operation.token.count}回` : ""}付加`);
+    }
+  });
+  return descriptions;
+}
+
+function buildDataComparisonCommand({ source, expectedPattern, targetCodeIds = ["99"], exactLength = true }) {
+  const sourceText = String(source ?? "");
+  if (!sourceText) return { ok: false, error: "バーコードデータを入力してください。" };
+  const sourceLength = Array.from(sourceText).length;
+  if (sourceLength > 9999) return { ok: false, error: "バーコードデータは9999桁以内で入力してください。" };
+  if (!String(expectedPattern ?? "")) return { ok: false, error: "希望データ出力結果を入力してください。" };
+
+  const parsed = parseDataComparisonPattern(expectedPattern);
+  if (!parsed.ok) return parsed;
+  const transformedSource = applyComparisonReplacements(sourceText, parsed.replacements);
+  const operationResult = buildComparisonOperations(transformedSource, parsed.tokens);
+  if (!operationResult.ok) return operationResult;
+
+  const expectedDisplay = parsed.tokens.map(comparisonTokenToDisplay).join("");
+  const simulated = simulateComparisonOperations(transformedSource, operationResult.operations);
+  if (simulated !== expectedDisplay) {
+    return { ok: false, error: "出力シミュレーションが希望結果と一致しないため、生成を停止しました。" };
+  }
+
+  const validCodeIds = [...new Set(targetCodeIds)].filter((codeId) =>
+    symbologyCodeTable.some((item) => item.codeId === codeId)
+  );
+  if (validCodeIds.length === 0) return { ok: false, error: "対象コードを選択してください。" };
+  const selectedCodeIds = validCodeIds.includes("99") ? ["99"] : validCodeIds;
+  const lengthField = exactLength ? String(sourceLength).padStart(4, "0") : "9999";
+  const editorCommand = buildComparisonEditorCommand(parsed.replacements, operationResult.operations);
+  const blocks = selectedCodeIds.map((codeId) => `0099${codeId}${lengthField}${editorCommand}`);
+  const targets = selectedCodeIds.map((codeId) => symbologyCodeTable.find((item) => item.codeId === codeId));
+  const descriptions = describeComparisonOperations(parsed.replacements, operationResult.operations);
+  const command = buildDataFormatCommandFromBlocks(blocks);
+
+  return {
+    ok: true,
+    command,
+    expectedDisplay,
+    simulated,
+    descriptions,
+    item: {
+      id: `df-data-comparison-${selectedCodeIds.join("-")}-${lengthField}`,
+      label: "試験版：データ比較から作成",
+      category: "登録例",
+      summary: `${targets.map((item) => item.label).join("、")}を対象に、入力データと希望出力の比較から生成しました。`,
+      keywords: [],
+      command,
+      skipGenerationValidation: true,
+      notes: descriptions,
+    },
+  };
 }
 
 function escapeRegExp(value) {
@@ -7082,6 +7388,67 @@ function renderCategories() {
   });
 }
 
+function renderDataCompareSymbologies() {
+  if (!dataCompareSymbologies) return;
+  const selectable = symbologyCodeTable.filter((item) => item.codeId !== "99");
+  dataCompareSymbologies.innerHTML = selectable
+    .map((item) => `<option value="${escapeHtml(item.codeId)}"${item.codeId === "77" ? " selected" : ""}>${escapeHtml(item.label)}</option>`)
+    .join("");
+  updateDataCompareTargetMode();
+}
+
+function updateDataCompareTargetMode() {
+  if (!dataCompareSymbologies || !dataCompareTargetMode) return;
+  const mode = dataCompareTargetMode.value;
+  dataCompareSymbologies.disabled = mode === "all";
+  dataCompareSymbologies.multiple = mode === "multiple";
+  dataCompareSymbologies.size = mode === "multiple" ? 5 : 1;
+  if (mode === "single") {
+    const selected = Array.from(dataCompareSymbologies.options).find((option) => option.selected);
+    Array.from(dataCompareSymbologies.options).forEach((option) => {
+      option.selected = option === selected;
+    });
+  }
+}
+
+function getDataCompareSelectedCodeIds() {
+  if (dataCompareTargetMode?.value === "all") return ["99"];
+  return Array.from(dataCompareSymbologies?.selectedOptions || []).map((option) => option.value);
+}
+
+function dataComparisonResultToHtml(result) {
+  return `
+    <div class="comparison-result">
+      <strong>認識した処理</strong>
+      <ul>${result.descriptions.map((description) => `<li>${escapeHtml(description)}</li>`).join("")}</ul>
+      <strong>出力シミュレーション</strong>
+      <div class="comparison-simulation">${escapeHtml(result.simulated)}</div>
+      <p>希望出力と一致しました。設定コマンドと設定用バーコードを生成します。</p>
+    </div>
+  `;
+}
+
+function submitDataComparisonForm() {
+  const result = buildDataComparisonCommand({
+    source: dataCompareSource?.value || "",
+    expectedPattern: dataCompareExpected?.value || "",
+    targetCodeIds: getDataCompareSelectedCodeIds(),
+    exactLength: dataCompareExactLength?.checked !== false,
+  });
+  if (!result.ok) {
+    if (dataCompareStatus) dataCompareStatus.textContent = result.error;
+    return;
+  }
+
+  if (dataCompareStatus) dataCompareStatus.textContent = "希望出力との一致を確認しました。";
+  const targetLabels = getDataCompareSelectedCodeIds()
+    .map((codeId) => symbologyCodeTable.find((item) => item.codeId === codeId)?.label)
+    .filter(Boolean)
+    .join("、");
+  addMessage("user", `試験版：データ比較から作成\n対象: ${targetLabels}\nバーコードデータ: ${dataCompareSource.value}\n希望出力: ${dataCompareExpected.value}`);
+  addMessage("bot", `${dataComparisonResultToHtml(result)}${commandToHtml(result.item)}`, { html: true });
+}
+
 form?.addEventListener("submit", (event) => {
   event.preventDefault();
   submitQuestion(input?.value || "");
@@ -7108,6 +7475,23 @@ samplePrompts.forEach((button) => {
   button.addEventListener("click", () => {
     submitQuestion(button.dataset.samplePrompt || "", { source: "sample_prompt" });
   });
+});
+
+dataCompareToggle?.addEventListener("click", () => {
+  const expanded = dataCompareToggle.getAttribute("aria-expanded") === "true";
+  dataCompareToggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+  dataCompareToggle.textContent = expanded ? "開く" : "閉じる";
+  if (dataCompareBody) dataCompareBody.hidden = expanded;
+});
+
+dataCompareTargetMode?.addEventListener("change", () => {
+  updateDataCompareTargetMode();
+  if (dataCompareStatus) dataCompareStatus.textContent = "";
+});
+
+dataCompareForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  submitDataComparisonForm();
 });
 
 dataFormatSettingsToggle?.addEventListener("click", () => {
@@ -7235,6 +7619,7 @@ if (appendSequenceToDataFormatInput) {
 
 renderQuickActions();
 renderCategories();
+renderDataCompareSymbologies();
 renderSymbolSettingsBuilder();
 renderOutputSequenceBuilder();
 loadAdminCommandCatalog().finally(() => addMessage("bot", welcomeText));
