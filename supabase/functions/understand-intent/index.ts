@@ -257,6 +257,7 @@ function buildInstructions(): string {
     "Prefer Japanese canonicalQuery that the existing deterministic command builders can understand, but never remove conditions or operations from the original request.",
     "For segmented output, use this exact style in canonicalQuery: '3桁送信、ハイフン挿入、4桁送信、ハイフン挿入、残り送信設定'. Do not rewrite it as '最初の3桁' or '3桁+ハイフン'.",
     "For output after an ordinal delimiter with a fixed length, preserve both the delimiter occurrence and output length in canonicalQuery, for example: '3個目のカンマの後ろから10桁出力'.",
+    "For output between ordinal occurrences of the same delimiter, preserve both ordinals and the delimiter in canonicalQuery, for example: '3個目のスペース後から4個目のスペース前まで出力'.",
     "For control/text suffixes, preserve literal control tokens such as CR, TAB, Enter, ESC, BS in detailedIntent.preservedTerms and canonicalQuery.",
     "For paired conditions like 'QRの10桁とCode128の20桁', preserve each symbology-length pair exactly. Do not create cross-product combinations.",
     "For multiple lengths on the same symbology like 'MicroQRの12桁と10桁', preserve both lengths and their original order.",
