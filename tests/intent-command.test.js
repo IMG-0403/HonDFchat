@@ -132,6 +132,37 @@ test("reopening data comparison preserves the current choices", () => {
   assert.doesNotMatch(String(app.setDataCompareExpanded), /initializeDataCompareDefaults/);
 });
 
+test("Enter in comparison source moves focus to expected output", () => {
+  const app = loadAppContext();
+  let prevented = false;
+  let focused = false;
+  const moved = app.moveDataCompareFocusOnEnter({
+    key: "Enter",
+    shiftKey: false,
+    isComposing: false,
+    preventDefault: () => { prevented = true; },
+  }, {
+    focus: () => { focused = true; },
+  });
+  assert.equal(moved, true);
+  assert.equal(prevented, true);
+  assert.equal(focused, true);
+
+  prevented = false;
+  focused = false;
+  const keptNewline = app.moveDataCompareFocusOnEnter({
+    key: "Enter",
+    shiftKey: true,
+    isComposing: false,
+    preventDefault: () => { prevented = true; },
+  }, {
+    focus: () => { focused = true; },
+  });
+  assert.equal(keptNewline, false);
+  assert.equal(prevented, false);
+  assert.equal(focused, false);
+});
+
 test("successful data comparison collapses the builder before showing its barcode", () => {
   const app = loadAppContext();
   assert.match(String(app.submitDataComparisonForm), /setDataCompareExpanded\(false\)/);
