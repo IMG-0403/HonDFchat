@@ -113,6 +113,12 @@ test("data comparison toggle points to the existing form", () => {
   assert.match(html, /id="dataCompareExtraction"/);
 });
 
+test("successful data comparison collapses the builder before showing its barcode", () => {
+  const app = loadAppContext();
+  assert.match(String(app.submitDataComparisonForm), /setDataCompareExpanded\(false\)/);
+  assert.match(String(app.setDataCompareExpanded), /dataCompareBody\.hidden = !expanded/);
+});
+
 test("paired QR and Code128 conditions are preserved for key prefix/suffix", () => {
   const app = loadAppContext();
   assert.equal(
@@ -891,6 +897,29 @@ test("data comparison extracts data from the beginning", () => {
   assert.equal(result.ok, true, result.error);
   assert.equal(result.command, "DFMBK30099770005F20300.");
   assert.equal(result.simulated, "ABC");
+});
+
+test("data comparison prefers the longest contiguous source match for repeated digits", () => {
+  const app = loadAppContext();
+  const result = app.buildDataComparisonCommand({
+    source: "01145123456789031711011930110ABC",
+    expectedPattern: "(17)110119",
+    targetCodeIds: ["77"],
+    exactLength: true,
+    dataInsertion: true,
+    dataExtraction: true,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.command, "DFMBK30099770032F516BA000128F20200BA000129F20600.");
+  assert.equal(result.simulated, "(17)110119");
+  assert.deepEqual(Array.from(result.descriptions), [
+    "元データを16桁読み飛ばし",
+    "「(」を挿入",
+    "データを2桁出力",
+    "「)」を挿入",
+    "データを6桁出力",
+    "残り8桁は出力しない",
+  ]);
 });
 
 test("data comparison extracts data through the end", () => {
