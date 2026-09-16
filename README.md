@@ -40,6 +40,24 @@ window.HON_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 
 `understand-intent` はLLMで自然言語をIntent理解JSONに変換するためのFunctionです。LLMには設定コマンドを自由生成させず、足りない項目の聞き返し、または既存ロジックへ渡す標準化依頼文だけを返します。`OPENAI_INTENT_MODEL` をSupabase Secretに設定すると利用モデルを変更できます。
 
+### Intent解析モデルの切り替え
+
+現在の試験運用モデルは `gpt-5.4-mini` です。モデルはSupabase Secretで切り替えるため、Edge Functionのコードを変更・再デプロイせずに切り戻せます。
+
+`gpt-4.1-mini` に戻す場合:
+
+```powershell
+npx supabase secrets set OPENAI_INTENT_MODEL=gpt-4.1-mini --project-ref obmyqllcqcnohqvkbjuy
+```
+
+`gpt-5.4-mini` に再設定する場合:
+
+```powershell
+npx supabase secrets set OPENAI_INTENT_MODEL=gpt-5.4-mini --project-ref obmyqllcqcnohqvkbjuy
+```
+
+Secretを設定していない場合は、`supabase/functions/understand-intent/index.ts` の既定値 `gpt-5.4-mini` が使われます。`OPENAI_API_KEY` はこの切り替えでは変更しません。
+
 ローカルPCだけで使う場合は、従来どおり `barcode-server.ps1` を起動して `config.js` のURLを `http://127.0.0.1:8765/barcode` に変更してください。
 
 スマートフォンでは `mobile.html` を開くと、質問入力と設定バーコード表示に絞った1カラム画面で利用できます。

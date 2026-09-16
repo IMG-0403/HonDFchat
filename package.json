@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test": "node --test tests/intent-command.test.js",
+    "test": "node --test tests/intent-command.test.js tests/admin-log-utils.test.mjs tests/openai-model-config.test.mjs",
     "test:llm": "node tests/llm-intent-regression.js"
   },
   "devDependencies": {
