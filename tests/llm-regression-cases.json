@@ -1,0 +1,262 @@
+[
+  {
+    "name": "Code39/Code128 8 digits segmented hyphen",
+    "question": "CODE39とCODE128の8桁読み取り時、3桁送信、ハイフン挿入、4桁送信、ハイフン挿入設定",
+    "expectedCommand": "DFMBK300996A0008F2032DF2042D|0099620008F2032DF2042D."
+  },
+  {
+    "name": "Code39/Code128 plus-separated segmented hyphen",
+    "question": "CODE39とCODE128の8桁読み取り時、3桁+ハイフン+4桁+ハイフン設定",
+    "expectedCommand": "DFMBK300996A0008F2032DF2042D|0099620008F2032DF2042D."
+  },
+  {
+    "name": "QR 8 digits segmented CR",
+    "question": "QRの8桁読み取り時、4桁出力、CR挿入、4桁出力、CR挿入設定",
+    "expectedCommand": "DFMBK30099730008F2040DF2040D."
+  },
+  {
+    "name": "QR 8 digits segmented CR with remainder",
+    "question": "QRの8桁読み取り時、4桁出力、CR挿入、4桁出力、CR挿入、残りデータ出力設定",
+    "expectedCommand": "DFMBK30099730008F2040DF2040DF100."
+  },
+  {
+    "name": "QR 8 digits segmented repeated CR",
+    "question": "QRの8桁読み取り時、4桁出力、CR挿入、4桁出力、CR2個挿入設定",
+    "expectedCommand": "DFMBK30099730008F2040DF20400F40D02."
+  },
+  {
+    "name": "QR and Code128 paired prefix key",
+    "question": "QRの10桁とCode128の20桁読み取り時データ先頭にCTRL+ALT+F4付加して出力",
+    "expectedCommand": "DFMBK30099730010B5011473F100|00996A0020B5011473F100."
+  },
+  {
+    "name": "QR and Code128 paired suffix key",
+    "question": "QRの10桁とCode128の20桁読み取り時データ末尾にCTRL+ALT+F4付加して出力",
+    "expectedCommand": "DFMBK30099730010F100B5011473|00996A0020F100B5011473."
+  },
+  {
+    "name": "Prefix and suffix hankaku zenkaku key",
+    "question": "データの先頭と末尾に半角全角キーを挿入する",
+    "expectedCommand": "DFMBK30099999999B5010001F100B5010001."
+  },
+  {
+    "name": "QR and Code128 delete hyphen",
+    "question": "QRの10桁とCode128の20桁読み取り時ハイフン削除して出力",
+    "expectedCommand": "DFMBK30099730010FB012DF100|00996A0020FB012DF100."
+  },
+  {
+    "name": "QR and Code128 replace slash with period",
+    "question": "QRの10桁とCode128の20桁読み取り時スラッシュをピリオドに置換して出力",
+    "expectedCommand": "DFMBK30099730010E4022F2EF100|00996A0020E4022F2EF100."
+  },
+  {
+    "name": "QR and Code128 range output",
+    "question": "QRの10桁とCode128の20桁読み取り時3桁目から5桁出力",
+    "expectedCommand": "DFMBK30099730010F502F20500|00996A0020F502F20500."
+  },
+  {
+    "name": "QR and Code128 from position",
+    "question": "QRの10桁とCode128の20桁読み取り時4桁目以降出力",
+    "expectedCommand": "DFMBK30099730010F503F100|00996A0020F503F100."
+  },
+  {
+    "name": "QR and Code128 zero suppress",
+    "question": "QRの10桁とCode128の20桁読み取り時0サプレス",
+    "expectedCommand": "DFMBK30099730010E630F100|00996A0020E630F100."
+  },
+  {
+    "name": "QR and Code128 trailing delete",
+    "question": "QRの10桁とCode128の20桁読み取り時末尾1桁データ削除",
+    "expectedCommand": "DFMBK30099730010E901|00996A0020E901."
+  },
+  {
+    "name": "QR and Code128 prefix text",
+    "question": "QRの10桁とCode128の20桁読み取り時先頭にABC付加して出力",
+    "expectedCommand": "DFMBK30099730010BA0003414243F100|00996A0020BA0003414243F100."
+  },
+  {
+    "name": "Two read lengths different prefix text",
+    "question": "12桁読み取り時、先頭に00挿入して出力、13桁読み取り時、先頭に0挿入して出力",
+    "expectedCommand": "DFMBK30099990012BA00023030F100|0099990013BA000130F100."
+  },
+  {
+    "name": "QR and Code128 insert text at third position",
+    "question": "QRの10桁とCode128の20桁読み取り時3桁目にABC付加して出力",
+    "expectedCommand": "DFMBK30099730010F20200BA0003414243F100|00996A0020F20200BA0003414243F100."
+  },
+  {
+    "name": "QR long leading output after space delete",
+    "question": "QR読み取り時、スペース削除して先頭から140桁出力",
+    "expectedCommand": "DFMBK30099739999FB0120F7F29900F24100."
+  },
+  {
+    "name": "MicroQR two lengths leading output",
+    "question": "MicroQRの12桁と10桁読み取り時、先頭10桁出力設定",
+    "expectedCommand": "DFMBK30099730012F21000|0099730010F21000."
+  },
+  {
+    "name": "Code39 range wording",
+    "question": "CODE39において、先頭3桁目から10桁分の切り出しをして出力する設定",
+    "expectedCommand": "DFMBK30099629999F502F21000."
+  },
+  {
+    "name": "OCR suffix text with CR",
+    "question": "OCR16桁読み取り時データ末尾に001+CR付加して出力",
+    "expectedCommand": "DFMBK300994F0016F100BA00043030310D."
+  },
+  {
+    "name": "JAN13 prefix filter",
+    "question": "JAN13先頭文字 21、23、25、45、49のみ読取出力",
+    "expectedCommand": "DFMBK30099649999FE32FE31F7F100|0099649999FE32FE33F7F100|0099649999FE32FE35F7F100|0099649999FE34FE35F7F100|0099649999FE34FE39F7F100;DFM_EN2;DFMDEC1."
+  },
+  {
+    "name": "Code39 prefix Z filter",
+    "question": "code39先頭Zの時のみ読み取り",
+    "expectedCommand": "DFMBK30099629999FE5AF7F100;DFM_EN2;DFMDEC1."
+  },
+  {
+    "name": "JAN13 repeated CR suffix",
+    "question": "JAN-13読み取り時、データ末尾にCRを４回付加して出力",
+    "expectedCommand": "DFMBK30099649999F100F40D04."
+  },
+  {
+    "name": "All output CRLF then 7500ms delay",
+    "question": "全桁出力後CRLF、ディレイ7500m秒を挿入する",
+    "expectedCommand": "DFMBK30099999999F100BA00020D0AEF1500."
+  },
+  {
+    "name": "DataMatrix repeated CR at position",
+    "question": "datamatrix読み取り時21桁目にCRを３回付加して出力",
+    "expectedCommand": "DFMBK30099779999F22000F40D03F100."
+  },
+  {
+    "name": "Malformed romaji should clarify",
+    "question": "DATAMATRIX読み取り時HAIFUNNWO",
+    "expectClarification": true
+  },
+  {
+    "name": "QR first 120 digits",
+    "question": "QR読み取り時先頭から120桁出力",
+    "expectedCommand": "DFMBK30099739999F29900F22100."
+  },
+  {
+    "name": "QR 191 two high-position ranges",
+    "question": "QRの191桁読み取り時、156桁目から9桁と166桁目から7桁出力",
+    "expectedCommand": "DFMBK30099730191F599F556F20900F501F20700."
+  },
+  {
+    "name": "Space until output",
+    "question": "スペースまでデータ出力",
+    "expectedCommand": "DFMBK30099999999F32000."
+  },
+  {
+    "name": "QR 10 digits until space",
+    "question": "コード種指定QR、桁数指定10桁でスペースまでデータ出力",
+    "expectedCommand": "DFMBK30099730010F32000."
+  },
+  {
+    "name": "QR and Code128 until space",
+    "question": "QRの10桁とCode128の20桁読み取り時スペースまでデータ出力",
+    "expectedCommand": "DFMBK30099730010F32000|00996A0020F32000."
+  },
+  {
+    "name": "QRCode P and Q until GS",
+    "question": "QRCODE読み取り時、P以降GSまで出力、Q以降GSまで出力",
+    "expectedCommand": "DFMBK30099739999F850F31D00F7F851F31D00."
+  },
+  {
+    "name": "Output after third comma",
+    "question": "3個目カンマ後ろのデータ出力設定",
+    "expectedCommand": "DFMBK30099999999F82CF501F82CF501F82CF501F100."
+  },
+  {
+    "name": "Output ten digits after third comma",
+    "question": "先頭から3つ目のカンマの後ろから10桁出力",
+    "expectedCommand": "DFMBK30099999999F82CF501F82CF501F82CF501F21000."
+  },
+  {
+    "name": "QR 50 digits output after third sharp",
+    "question": "QRの50桁読み取り時、3個目の#の後ろからデータ出力設定",
+    "expectedCommand": "DFMBK30099730050F823F501F823F501F823F501F100."
+  },
+  {
+    "name": "All symbologies trailing one delete",
+    "question": "末尾1桁データ削除",
+    "expectedCommand": "DFMBK30099999999E901."
+  },
+  {
+    "name": "All symbologies do not send trailing three",
+    "question": "末尾3桁を送信しない設定",
+    "expectedCommand": "DFMBK30099999999E903."
+  },
+  {
+    "name": "QR trailing two delete",
+    "question": "QR読み取り時、末尾2桁データ削除",
+    "expectedCommand": "DFMBK30099739999E902."
+  },
+  {
+    "name": "Code128 suffix Ctrl Alt F5",
+    "question": "Code128読み取り時、データ末尾にCTRL+ALT+F5のキー入力設定",
+    "expectedCommand": "DFMBK300996A9999F100B5011474."
+  },
+  {
+    "name": "NW7 prefix ABC",
+    "question": "NW-7読み取り時、先頭にABCの文字列入力設定",
+    "expectedCommand": "DFMBK30099619999BA0003414243F100."
+  },
+  {
+    "name": "GS1-128 replace GS with sharp",
+    "question": "GS1-128読み取り時、GSキャラクタを#に置き換えて出力設定",
+    "expectedCommand": "DFMBK30099499999E4021D23F100."
+  },
+  {
+    "name": "lowercase gs1-128 replace GS with sharp",
+    "question": "gs1-128読み取り時、GSキャラクタを#に置き換えて出力設定",
+    "expectedCommand": "DFMBK30099499999E4021D23F100."
+  },
+  {
+    "name": "lowercase gs1-128 replace GS with space",
+    "question": "gs1-128読み取り時にGSをスペースに変換したい",
+    "expectedCommand": "DFMBK30099499999E4021D20F100."
+  },
+  {
+    "name": "GS1-128 and GS1 DataMatrix replace FNC1 with space",
+    "question": "GS1-128とGS-1DatamatrixのFNC1をスペース文字に置き換え",
+    "expectedCommand": "DFMBK30099499999E4021D20F100|0099779999E4021D20F100."
+  },
+  {
+    "name": "QR CR repeated suffix",
+    "question": "QR読み取り時、データ末尾にCRを4回付加して出力",
+    "expectedCommand": "DFMBK30099739999F100F40D04."
+  },
+  {
+    "name": "Position 20 hyphen three times",
+    "question": "20桁目にハイフンを3個付加して出力",
+    "expectedCommand": "DFMBK30099999999F21900F42D03F100."
+  },
+  {
+    "name": "GS1-128 insert pipe at position 17",
+    "question": "GS1-128読み取り時、17桁目に|を挿入",
+    "expectedCommand": "DFMBK30099499999F2167CF100."
+  },
+  {
+    "name": "Two position TAB insert",
+    "question": "10桁目にTAB、20桁目にTABを付加して出力",
+    "expectedCommand": "DFMBK30099999999F20909F20909F100."
+  },
+  {
+    "name": "QR and Code128 two position TAB insert",
+    "question": "QRの10桁とCode128の20桁読み取り時10桁目にTAB、20桁目にTABを付加して出力",
+    "expectedCommand": "DFMBK30099730010F20909F20909F100|00996A0020F20909F20909F100."
+  },
+  {
+    "name": "Code39 two seconds then F4",
+    "question": "Code39データ入力の2秒経過後にF4を付加",
+    "expectedCommand": "DFMBK30099629999F100EF0400B5010073."
+  },
+  {
+    "name": "Code128 prefix b21",
+    "question": "Code128読み取り時、先頭にb21を付加して出力",
+    "expectedCommand": "DFMBK300996A9999BA0003623231F100."
+  }
+]
