@@ -163,6 +163,15 @@ test("Enter in comparison source moves focus to expected output", () => {
   assert.equal(focused, false);
 });
 
+test("trash reset returns data comparison to its start state", () => {
+  const app = loadAppContext();
+  assert.match(String(app.resetDataComparisonForm), /dataCompareSource\.value = ""/);
+  assert.match(String(app.resetDataComparisonForm), /dataCompareExpected\.value = ""/);
+  assert.match(String(app.resetDataComparisonForm), /initializeDataCompareDefaults\(\)/);
+  assert.match(String(app.resetDataComparisonForm), /setDataCompareExpanded\(false\)/);
+  assert.match(String(app.clearConversationAndComparison), /resetDataComparisonForm\(\)/);
+});
+
 test("successful data comparison collapses the builder before showing its barcode", () => {
   const app = loadAppContext();
   assert.match(String(app.submitDataComparisonForm), /setDataCompareExpanded\(false\)/);
