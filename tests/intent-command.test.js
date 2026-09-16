@@ -571,6 +571,14 @@ test("until-character output supports spaces and paired conditions", () => {
     "DFMBK30099999999F820F501F820F501F820F501F32000."
   );
   assert.equal(
+    checkedCommand(app, "QR読み取り時に先頭から3個目のスペース後から4個目のスペース前までのデータ出力", "buildOutputBetweenNthCharactersCommand"),
+    "DFMBK30099739999F820F501F820F501F820F501F32000."
+  );
+  assert.equal(
+    app.buildFirstCommandCandidate("QR読み取り時に先頭から3個目のスペース後から4個目のスペース前までのデータ出力")?.command,
+    "DFMBK30099739999F820F501F820F501F820F501F32000."
+  );
+  assert.equal(
     checkedCommand(app, "QRの50桁読み取り時、3個目の#の後ろからデータ出力設定", "buildOutputAfterNthCharacterCommand"),
     "DFMBK30099730050F823F501F823F501F823F501F100."
   );
