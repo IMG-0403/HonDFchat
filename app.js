@@ -7707,6 +7707,13 @@ function submitDataComparisonForm() {
   addMessage("bot", `${dataComparisonResultToHtml(result)}${commandToHtml(result.item)}`, { html: true });
 }
 
+function moveDataCompareFocusOnEnter(event, nextField = dataCompareExpected) {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return false;
+  event.preventDefault();
+  nextField?.focus();
+  return true;
+}
+
 form?.addEventListener("submit", (event) => {
   event.preventDefault();
   submitQuestion(input?.value || "");
@@ -7743,6 +7750,10 @@ dataCompareToggle?.addEventListener("click", () => {
 dataCompareTargetMode?.addEventListener("change", () => {
   updateDataCompareTargetMode();
   if (dataCompareStatus) dataCompareStatus.textContent = "";
+});
+
+dataCompareSource?.addEventListener("keydown", (event) => {
+  moveDataCompareFocusOnEnter(event);
 });
 
 dataCompareForm?.addEventListener("submit", (event) => {
