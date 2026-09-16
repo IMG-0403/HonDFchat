@@ -7714,6 +7714,19 @@ function moveDataCompareFocusOnEnter(event, nextField = dataCompareExpected) {
   return true;
 }
 
+function resetDataComparisonForm() {
+  if (dataCompareSource) dataCompareSource.value = "";
+  if (dataCompareExpected) dataCompareExpected.value = "";
+  initializeDataCompareDefaults();
+  setDataCompareExpanded(false);
+}
+
+function clearConversationAndComparison() {
+  if (messages) messages.textContent = "";
+  resetDataComparisonForm();
+  input?.focus();
+}
+
 form?.addEventListener("submit", (event) => {
   event.preventDefault();
   submitQuestion(input?.value || "");
@@ -7732,8 +7745,7 @@ messages?.addEventListener("click", async (event) => {
 });
 
 clearButton?.addEventListener("click", () => {
-  if (messages) messages.textContent = "";
-  input?.focus();
+  clearConversationAndComparison();
 });
 
 samplePrompts.forEach((button) => {
