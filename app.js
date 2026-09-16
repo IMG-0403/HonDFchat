@@ -2709,6 +2709,62 @@ function buildBetweenCharacterDeleteCommand(query) {
   };
 }
 
+function findOutputBetweenNthCharacters(query) {
+  const normalizedCaseQuery = query
+    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\s+/g, " ")
+    .trim();
+  const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|fnc1|fnc 1|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
+  const pattern = new RegExp(
+    `(?:先頭\\s*(?:から|より)\\s*)?(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(${tokenPattern})\\s*(?:の)?\\s*(?:後ろ|後)\\s*(?:から)?\\s*(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(${tokenPattern})\\s*(?:の)?\\s*(?:前|手前)\\s*(?:まで)?\\s*(?:の)?\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`,
+    "i"
+  );
+  const match = normalizedCaseQuery.match(pattern);
+  if (!match) return null;
+
+  const startCount = Number(match[1]);
+  const startChar = normalizeReplaceCharacter(match[2]);
+  const endCount = Number(match[3]);
+  const endChar = normalizeReplaceCharacter(match[4]);
+  if (!startChar || !endChar || startChar !== endChar) return null;
+  if (!Number.isInteger(startCount) || !Number.isInteger(endCount) || startCount < 1 || endCount <= startCount || endCount > 99) return null;
+
+  return { startCount, endCount, char: startChar };
+}
+
+function buildOutputBetweenNthCharactersCommand(query) {
+  const normalizedQuery = normalizeText(query);
+  const target = findOutputBetweenNthCharacters(query);
+  if (!target) return null;
+
+  const symbologyTargets = getSymbologyTargets(normalizedQuery);
+  const readLengths = getReadLengths(normalizedQuery);
+  const targetHex = target.char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+  const targetLabel = describeReplaceCharacter(target.char);
+  const searchMove = `F8${targetHex}F501`;
+  const interveningCount = target.endCount - target.startCount - 1;
+  const editorCommand = `${searchMove.repeat(target.startCount)}${searchMove.repeat(interveningCount)}F3${targetHex}00`;
+  const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
+  const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
+  const lengthNote = readLengths.length > 0
+    ? `${readLengths.map((length) => String(length).padStart(4, "0")).join("、")} は${readLengths.join("桁と")}桁のバーコードだけを対象にする指定です。`
+    : "9999 は全桁数を表す指定です。";
+
+  return {
+    id: `df-generated-between-nth-${targetHex}-${target.startCount}-${target.endCount}-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
+    label: `${codeLabel}・${lengthLabel} ${target.startCount}個目から${target.endCount}個目の${targetLabel}間を出力`,
+    category: "登録例",
+    summary: `${codeLabel}・${lengthLabel}を対象に、${target.startCount}個目の${targetLabel}の直後から${target.endCount}個目の${targetLabel}の直前までを出力します。`,
+    keywords: [],
+    command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
+    notes: [
+      `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
+      `F8${targetHex}F501 で次の${targetLabel}の直後へ移動します。`,
+      `この組み合わせで${target.startCount}個目の直後まで進み、F3${targetHex}00 で${target.endCount}個目の${targetLabel}の手前まで送信します。`,
+    ],
+  };
+}
+
 function findOutputAfterNthCharacter(query) {
   const normalizedCaseQuery = query
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
@@ -2787,6 +2843,7 @@ function buildCommandFromStructuredNlp(question, intentUnderstanding = buildInte
     findExactSpaceTransformCommand,
     buildDeleteThenFromPositionToEndCommand,
     buildBetweenCharacterDeleteCommand,
+    buildOutputBetweenNthCharactersCommand,
     findExactDeleteCharacterCommand,
     buildSearchUntilCharacterCommand,
     buildOutputAfterNthCharacterCommand,
@@ -6579,6 +6636,7 @@ function buildGeneratedCommandCandidate(question, intentUnderstanding = buildInt
     buildDeleteThenLeadingCommand,
     buildDeleteThenFromPositionToEndCommand,
     buildBetweenCharacterDeleteCommand,
+    buildOutputBetweenNthCharactersCommand,
     () => buildCommandFromStructuredNlp(question, intentUnderstanding),
     buildSymbologyDelayKeyCommand,
     buildSuffixB5Command,
@@ -6639,6 +6697,16 @@ async function answerQuestion(question) {
   if (exactCommandMatches.length === 1) {
     const intentUnderstanding = buildIntentUnderstanding(question);
     const item = validateGeneratedCommand(exactCommandMatches[0], intentUnderstanding);
+    if (!item?.validationFailed) {
+      addBotResponse(originalQuestion, commandToHtml(item), { html: true });
+      return;
+    }
+  }
+
+  const directNthCharacterRange = buildOutputBetweenNthCharactersCommand(question);
+  if (directNthCharacterRange) {
+    const intentUnderstanding = buildIntentUnderstanding(question);
+    const item = validateGeneratedCommand(directNthCharacterRange, intentUnderstanding);
     if (!item?.validationFailed) {
       addBotResponse(originalQuestion, commandToHtml(item), { html: true });
       return;
