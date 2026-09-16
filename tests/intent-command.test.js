@@ -109,8 +109,22 @@ test("data comparison toggle points to the existing form", () => {
   const controlsId = html.match(/id="dataCompareToggle"[^>]*aria-controls="([^"]+)"/)?.[1];
   assert.equal(controlsId, "dataCompareForm");
   assert.match(html, new RegExp(`id="${controlsId}"`));
-  assert.match(html, /id="dataCompareInsertion"[^>]*checked/);
+  assert.doesNotMatch(html.match(/<input id="dataCompareInsertion"[^>]*>/)?.[0] || "", /checked/);
   assert.match(html, /id="dataCompareExtraction"/);
+});
+
+test("data comparison starts with all codes and optional conditions disabled", () => {
+  const html = fs.readFileSync("index.html", "utf8");
+  assert.match(html, /<option value="all" selected>全てのコード<\/option>/);
+  assert.doesNotMatch(html.match(/<input id="dataCompareExactLength"[^>]*>/)?.[0] || "", /checked/);
+  assert.doesNotMatch(html.match(/<input id="dataCompareInsertion"[^>]*>/)?.[0] || "", /checked/);
+  assert.doesNotMatch(html.match(/<input id="dataCompareExtraction"[^>]*>/)?.[0] || "", /checked/);
+
+  const app = loadAppContext();
+  assert.match(String(app.initializeDataCompareDefaults), /dataCompareTargetMode\.value = "all"/);
+  assert.match(String(app.initializeDataCompareDefaults), /dataCompareExactLength\.checked = false/);
+  assert.match(String(app.initializeDataCompareDefaults), /dataCompareInsertion\.checked = false/);
+  assert.match(String(app.initializeDataCompareDefaults), /dataCompareExtraction\.checked = false/);
 });
 
 test("successful data comparison collapses the builder before showing its barcode", () => {
