@@ -109,6 +109,8 @@ test("data comparison toggle points to the existing form", () => {
   const controlsId = html.match(/id="dataCompareToggle"[^>]*aria-controls="([^"]+)"/)?.[1];
   assert.equal(controlsId, "dataCompareForm");
   assert.match(html, new RegExp(`id="${controlsId}"`));
+  assert.match(html, /id="dataCompareInsertion"[^>]*checked/);
+  assert.match(html, /id="dataCompareExtraction"/);
 });
 
 test("paired QR and Code128 conditions are preserved for key prefix/suffix", () => {
@@ -588,6 +590,24 @@ test("until-character output supports spaces and paired conditions", () => {
   );
 });
 
+test("QR third-to-fourth space extraction remains QR-only", () => {
+  const app = loadAppContext();
+  const question = "QR読み取り時に先頭から3個目のスペース後から4個目のスペース前までのデータ出力";
+  const item = app.buildOutputBetweenNthCharactersCommand(question);
+  assert.ok(item, "QRのスペース間抽出コマンドを生成できること");
+  assert.equal(item.command, "DFMBK30099739999F820F501F820F501F820F501F32000.");
+  assert.match(item.command, /^DFMBK3009973/);
+  assert.doesNotMatch(item.command, /^DFMBK3009999/);
+  assert.match(item.summary, /QR/);
+
+  const candidate = app.buildFirstCommandCandidate(question);
+  assert.equal(candidate?.command, item.command);
+
+  const checked = app.validateGeneratedCommand(item, app.buildIntentUnderstanding(question));
+  assert.equal(checked.validationFailed, undefined, checked.validationErrors?.join("\n"));
+  assert.equal(checked.command, item.command);
+});
+
 test("between-character deletion removes content enclosed by delimiters", () => {
   const app = loadAppContext();
   assert.equal(
@@ -816,7 +836,159 @@ test("data comparison prototype generates insertion, control, replacement, and m
     targetCodeIds: ["77"],
   });
   assert.equal(unsupportedDeletion.ok, false);
-  assert.match(unsupportedDeletion.error, /試験版は挿入/);
+  assert.match(unsupportedDeletion.error, /データ抽出にチェック/);
+
+  const extracted = app.buildDataComparisonCommand({
+    source: "ABCDEFG",
+    expectedPattern: "CDE",
+    targetCodeIds: ["77"],
+    exactLength: true,
+    dataInsertion: false,
+    dataExtraction: true,
+  });
+  assert.equal(extracted.ok, true, extracted.error);
+  assert.equal(extracted.command, "DFMBK30099770007F502F20300.");
+  assert.equal(extracted.simulated, "CDE");
+  assert.deepEqual(Array.from(extracted.descriptions), [
+    "元データを2桁読み飛ばし",
+    "データを3桁出力",
+    "残り2桁は出力しない",
+  ]);
+
+  const insertedAtExpectedPosition = app.buildDataComparisonCommand({
+    source: "ABCDE",
+    expectedPattern: "AB-XCDE",
+    targetCodeIds: ["77"],
+    exactLength: true,
+    dataInsertion: true,
+    dataExtraction: false,
+  });
+  assert.equal(insertedAtExpectedPosition.ok, true, insertedAtExpectedPosition.error);
+  assert.equal(insertedAtExpectedPosition.command, "DFMBK30099770005F20200BA00022D58F100.");
+
+  const extractedAndInserted = app.buildDataComparisonCommand({
+    source: "ABCDEF",
+    expectedPattern: "AB-XEF",
+    targetCodeIds: ["77"],
+    exactLength: true,
+    dataInsertion: true,
+    dataExtraction: true,
+  });
+  assert.equal(extractedAndInserted.ok, true, extractedAndInserted.error);
+  assert.equal(extractedAndInserted.command, "DFMBK30099770006F20200F502BA00022D58F100.");
+  assert.equal(extractedAndInserted.simulated, "AB-XEF");
+});
+
+test("data comparison extracts data from the beginning", () => {
+  const app = loadAppContext();
+  const result = app.buildDataComparisonCommand({
+    source: "ABCDE",
+    expectedPattern: "ABC",
+    targetCodeIds: ["77"],
+    dataInsertion: false,
+    dataExtraction: true,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.command, "DFMBK30099770005F20300.");
+  assert.equal(result.simulated, "ABC");
+});
+
+test("data comparison extracts data through the end", () => {
+  const app = loadAppContext();
+  const result = app.buildDataComparisonCommand({
+    source: "ABCDE",
+    expectedPattern: "CDE",
+    targetCodeIds: ["73"],
+    dataInsertion: false,
+    dataExtraction: true,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.command, "DFMBK30099730005F502F100.");
+  assert.equal(result.simulated, "CDE");
+});
+
+test("data comparison extracts multiple separated ranges", () => {
+  const app = loadAppContext();
+  const result = app.buildDataComparisonCommand({
+    source: "ABCDEF",
+    expectedPattern: "ACE",
+    targetCodeIds: ["77"],
+    dataInsertion: false,
+    dataExtraction: true,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.command, "DFMBK30099770006F20100F501F20100F501F20100.");
+  assert.equal(result.simulated, "ACE");
+});
+
+test("data comparison inserts text at both ends", () => {
+  const app = loadAppContext();
+  const result = app.buildDataComparisonCommand({
+    source: "ABC",
+    expectedPattern: "XABCY",
+    targetCodeIds: ["77"],
+    dataInsertion: true,
+    dataExtraction: false,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.command, "DFMBK30099770003BA000158F20300BA000159.");
+  assert.equal(result.simulated, "XABCY");
+});
+
+test("data comparison reports when extraction is not enabled", () => {
+  const app = loadAppContext();
+  const result = app.buildDataComparisonCommand({
+    source: "ABCDE",
+    expectedPattern: "ACE",
+    targetCodeIds: ["77"],
+    dataInsertion: true,
+    dataExtraction: false,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /データ抽出にチェック/);
+});
+
+test("data comparison reports when insertion is not enabled", () => {
+  const app = loadAppContext();
+  const result = app.buildDataComparisonCommand({
+    source: "ABC",
+    expectedPattern: "ABXC",
+    targetCodeIds: ["77"],
+    dataInsertion: false,
+    dataExtraction: true,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /データ挿入にチェック/);
+});
+
+test("data comparison accepts an unchanged result without operations enabled", () => {
+  const app = loadAppContext();
+  const result = app.buildDataComparisonCommand({
+    source: "ABC",
+    expectedPattern: "ABC",
+    targetCodeIds: ["99"],
+    exactLength: false,
+    dataInsertion: false,
+    dataExtraction: false,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.command, "DFMBK30099999999F100.");
+  assert.equal(result.simulated, "ABC");
+});
+
+test("data comparison splits extraction cursor moves over 99 characters", () => {
+  const app = loadAppContext();
+  const source = `${"A".repeat(120)}XYZ`;
+  const result = app.buildDataComparisonCommand({
+    source,
+    expectedPattern: "XYZ",
+    targetCodeIds: ["73"],
+    dataInsertion: false,
+    dataExtraction: true,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.command, "DFMBK30099730123F599F521F100.");
+  assert.equal(result.simulated, "XYZ");
 });
 
 test("malformed romaji request does not match unrelated catalog commands", () => {
