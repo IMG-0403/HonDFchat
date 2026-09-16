@@ -1617,38 +1617,81 @@ function buildComparisonOperations(transformedSource, expectedTokens, { allowIns
     return { ok: false, error: "比較するデータが長すぎます。元データまたは希望結果を短くしてください。" };
   }
 
-  const impossible = Number.POSITIVE_INFINITY;
-  const costs = Array.from({ length: sourceLength + 1 }, () => {
-    const row = new Float64Array(expectedLength + 1);
-    row.fill(impossible);
-    return row;
-  });
-  costs[sourceLength][expectedLength] = 0;
+  const columnCount = expectedLength + 1;
+  const cellCount = (sourceLength + 1) * columnCount;
+  const invalidScore = -1000000000;
+  const matchScores = [new Int32Array(cellCount), new Int32Array(cellCount)];
+  const gapScores = [new Int32Array(cellCount), new Int32Array(cellCount)];
+  const decisions = [new Uint8Array(cellCount), new Uint8Array(cellCount)];
+  matchScores.forEach((scores) => scores.fill(invalidScore));
+
+  const cellIndex = (sourceIndex, expectedIndex) => sourceIndex * columnCount + expectedIndex;
+  const endCell = cellIndex(sourceLength, expectedLength);
+  matchScores[0][endCell] = 0;
+  matchScores[1][endCell] = 0;
 
   for (let sourceIndex = sourceLength; sourceIndex >= 0; sourceIndex -= 1) {
     for (let expectedIndex = expectedLength; expectedIndex >= 0; expectedIndex -= 1) {
       if (sourceIndex === sourceLength && expectedIndex === expectedLength) continue;
-      if (expectedIndex === expectedLength) {
-        costs[sourceIndex][expectedIndex] = allowExtraction ? 0 : impossible;
-        continue;
-      }
+      const currentCell = cellIndex(sourceIndex, expectedIndex);
 
-      const token = expectedTokens[expectedIndex];
-      let best = impossible;
-      if (sourceIndex < sourceLength && token.type === "character" && token.value === sourceCharacters[sourceIndex]) {
-        best = costs[sourceIndex + 1][expectedIndex + 1];
+      for (const started of [1, 0]) {
+        if (expectedIndex === expectedLength) {
+          if (allowExtraction) {
+            matchScores[started][currentCell] = 0;
+            gapScores[started][currentCell] = 0;
+            decisions[started][currentCell] = 4;
+          }
+          continue;
+        }
+
+        let bestMatches = invalidScore;
+        let bestGaps = invalidScore;
+        let bestDecision = 0;
+        const consider = (candidateMatches, candidateGaps, candidateDecision) => {
+          if (candidateMatches < 0) return;
+          if (candidateMatches > bestMatches || (candidateMatches === bestMatches && candidateGaps > bestGaps)) {
+            bestMatches = candidateMatches;
+            bestGaps = candidateGaps;
+            bestDecision = candidateDecision;
+          }
+        };
+
+        const token = expectedTokens[expectedIndex];
+        if (sourceIndex < sourceLength && token.type === "character" && token.value === sourceCharacters[sourceIndex]) {
+          const nextCell = cellIndex(sourceIndex + 1, expectedIndex + 1);
+          if (matchScores[1][nextCell] >= 0) {
+            consider(matchScores[1][nextCell] + 1, gapScores[1][nextCell], 1);
+          }
+        }
+
+        if (allowExtraction && sourceIndex < sourceLength) {
+          const nextCell = cellIndex(sourceIndex + 1, expectedIndex);
+          if (matchScores[started][nextCell] >= 0) {
+            const isInternalGap = started === 1 && matchScores[started][nextCell] > 0;
+            consider(
+              matchScores[started][nextCell],
+              gapScores[started][nextCell] - (isInternalGap ? 1 : 0),
+              2
+            );
+          }
+        }
+
+        if (allowInsertion) {
+          const nextCell = cellIndex(sourceIndex, expectedIndex + 1);
+          if (matchScores[started][nextCell] >= 0) {
+            consider(matchScores[started][nextCell], gapScores[started][nextCell], 3);
+          }
+        }
+
+        matchScores[started][currentCell] = bestMatches;
+        gapScores[started][currentCell] = bestGaps;
+        decisions[started][currentCell] = bestDecision;
       }
-      if (allowExtraction && sourceIndex < sourceLength) {
-        best = Math.min(best, 1 + costs[sourceIndex + 1][expectedIndex]);
-      }
-      if (allowInsertion) {
-        best = Math.min(best, 1 + costs[sourceIndex][expectedIndex + 1]);
-      }
-      costs[sourceIndex][expectedIndex] = best;
     }
   }
 
-  if (!Number.isFinite(costs[0][0])) {
+  if (matchScores[0][0] < 0) {
     if (!allowInsertion && !allowExtraction) {
       return { ok: false, error: "元データと希望結果が一致しません。データ挿入またはデータ抽出にチェックしてください。" };
     }
@@ -1660,36 +1703,30 @@ function buildComparisonOperations(transformedSource, expectedTokens, { allowIns
 
   let sourceIndex = 0;
   let expectedIndex = 0;
+  let started = 0;
   while (expectedIndex < expectedLength) {
     const token = expectedTokens[expectedIndex];
-    if (
-      sourceIndex < sourceLength
-      && token.type === "character"
-      && token.value === sourceCharacters[sourceIndex]
-      && costs[sourceIndex][expectedIndex] === costs[sourceIndex + 1][expectedIndex + 1]
-    ) {
+    const decision = decisions[started][cellIndex(sourceIndex, expectedIndex)];
+    if (decision === 1) {
       appendComparisonOperation(operations, { type: "send", count: 1 });
       sourceIndex += 1;
       expectedIndex += 1;
+      started = 1;
       continue;
     }
 
-    if (
-      allowExtraction
-      && sourceIndex < sourceLength
-      && costs[sourceIndex][expectedIndex] === 1 + costs[sourceIndex + 1][expectedIndex]
-    ) {
+    if (decision === 2) {
       appendComparisonOperation(operations, { type: "skip", count: 1 });
       sourceIndex += 1;
       continue;
     }
 
-    if (allowInsertion && costs[sourceIndex][expectedIndex] === 1 + costs[sourceIndex][expectedIndex + 1]) {
+    if (decision === 3) {
       if (token.type === "character") {
-      if (token.value.charCodeAt(0) > 0xFF) {
-        return { ok: false, error: `挿入文字「${token.value}」は試験版では使用できません。` };
-      }
-      appendComparisonOperation(operations, { type: "insertText", text: token.value });
+        if (token.value.charCodeAt(0) > 0xFF) {
+          return { ok: false, error: `挿入文字「${token.value}」は試験版では使用できません。` };
+        }
+        appendComparisonOperation(operations, { type: "insertText", text: token.value });
       } else {
         operations.push({ type: "insertControl", token });
       }
@@ -7604,6 +7641,14 @@ function dataComparisonResultToHtml(result) {
   `;
 }
 
+function setDataCompareExpanded(expanded) {
+  if (dataCompareToggle) {
+    dataCompareToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    dataCompareToggle.textContent = expanded ? "閉じる" : "開く";
+  }
+  if (dataCompareBody) dataCompareBody.hidden = !expanded;
+}
+
 function submitDataComparisonForm() {
   const result = buildDataComparisonCommand({
     source: dataCompareSource?.value || "",
@@ -7627,6 +7672,7 @@ function submitDataComparisonForm() {
     dataCompareInsertion?.checked ? "データ挿入" : "",
     dataCompareExtraction?.checked ? "データ抽出" : "",
   ].filter(Boolean).join("・") || "差分なし";
+  setDataCompareExpanded(false);
   addMessage("user", `試験版：データ比較から作成\n対象: ${targetLabels}\n処理: ${selectedOperations}\nバーコードデータ: ${dataCompareSource.value}\n希望出力: ${dataCompareExpected.value}`);
   addMessage("bot", `${dataComparisonResultToHtml(result)}${commandToHtml(result.item)}`, { html: true });
 }
@@ -7661,9 +7707,7 @@ samplePrompts.forEach((button) => {
 
 dataCompareToggle?.addEventListener("click", () => {
   const expanded = dataCompareToggle.getAttribute("aria-expanded") === "true";
-  dataCompareToggle.setAttribute("aria-expanded", expanded ? "false" : "true");
-  dataCompareToggle.textContent = expanded ? "開く" : "閉じる";
-  if (dataCompareBody) dataCompareBody.hidden = expanded;
+  setDataCompareExpanded(!expanded);
 });
 
 dataCompareTargetMode?.addEventListener("change", () => {
