@@ -1548,10 +1548,8 @@ function parseDataComparisonPattern(pattern) {
       if (sourceChar.charCodeAt(0) > 0xFF || targetChar.charCodeAt(0) > 0xFF) {
         return { ok: false, error: "試験版の置換には1バイト文字を指定してください。" };
       }
-      if (replacements.some((item) => item.sourceChar === sourceChar)) {
-        return { ok: false, error: `置換元 ${describeReplaceCharacter(sourceChar)} が重複しています。` };
-      }
       replacements.push({ sourceChar, targetChar });
+      tokens.push({ type: "replacement", sourceChar, targetChar });
       index = end + 1;
       continue;
     }
@@ -1586,6 +1584,7 @@ function applyComparisonReplacements(source, replacements) {
 
 function comparisonTokenToDisplay(token) {
   if (token.type === "character") return token.value;
+  if (token.type === "replacement") return token.targetChar;
   const countLabel = token.count > 1 ? `*${token.count}` : "";
   return `[${token.label}${countLabel}]`;
 }
@@ -1665,6 +1664,19 @@ function buildComparisonOperations(transformedSource, expectedTokens, { allowIns
           }
         }
 
+        if (
+          allowInsertion
+          && allowExtraction
+          && sourceIndex < sourceLength
+          && token.type === "replacement"
+          && token.sourceChar === sourceCharacters[sourceIndex]
+        ) {
+          const nextCell = cellIndex(sourceIndex + 1, expectedIndex + 1);
+          if (matchScores[1][nextCell] >= 0) {
+            consider(matchScores[1][nextCell] + 1, gapScores[1][nextCell], 5);
+          }
+        }
+
         if (allowExtraction && sourceIndex < sourceLength) {
           const nextCell = cellIndex(sourceIndex + 1, expectedIndex);
           if (matchScores[started][nextCell] >= 0) {
@@ -1677,7 +1689,7 @@ function buildComparisonOperations(transformedSource, expectedTokens, { allowIns
           }
         }
 
-        if (allowInsertion) {
+        if (allowInsertion && token.type !== "replacement") {
           const nextCell = cellIndex(sourceIndex, expectedIndex + 1);
           if (matchScores[started][nextCell] >= 0) {
             consider(matchScores[started][nextCell], gapScores[started][nextCell], 3);
@@ -1731,6 +1743,15 @@ function buildComparisonOperations(transformedSource, expectedTokens, { allowIns
         operations.push({ type: "insertControl", token });
       }
       expectedIndex += 1;
+      continue;
+    }
+
+    if (decision === 5) {
+      appendComparisonOperation(operations, { type: "skip", count: 1 });
+      appendComparisonOperation(operations, { type: "insertText", text: token.targetChar });
+      sourceIndex += 1;
+      expectedIndex += 1;
+      started = 1;
       continue;
     }
 
@@ -1846,7 +1867,7 @@ function buildDataComparisonCommand({
 
   const parsed = parseDataComparisonPattern(expectedPattern);
   if (!parsed.ok) return parsed;
-  const transformedSource = applyComparisonReplacements(sourceText, parsed.replacements);
+  const transformedSource = sourceText;
   const operationResult = buildComparisonOperations(transformedSource, parsed.tokens, {
     allowInsertion: dataInsertion,
     allowExtraction: dataExtraction,
@@ -1865,10 +1886,10 @@ function buildDataComparisonCommand({
   if (validCodeIds.length === 0) return { ok: false, error: "対象コードを選択してください。" };
   const selectedCodeIds = validCodeIds.includes("99") ? ["99"] : validCodeIds;
   const lengthField = exactLength ? String(sourceLength).padStart(4, "0") : "9999";
-  const editorCommand = buildComparisonEditorCommand(parsed.replacements, operationResult.operations);
+  const editorCommand = buildComparisonEditorCommand([], operationResult.operations);
   const blocks = selectedCodeIds.map((codeId) => `0099${codeId}${lengthField}${editorCommand}`);
   const targets = selectedCodeIds.map((codeId) => symbologyCodeTable.find((item) => item.codeId === codeId));
-  const descriptions = describeComparisonOperations(parsed.replacements, operationResult.operations);
+  const descriptions = describeComparisonOperations([], operationResult.operations);
   const command = buildDataFormatCommandFromBlocks(blocks);
 
   return {
@@ -7615,6 +7636,7 @@ function initializeDataCompareDefaults() {
   if (dataCompareExactLength) dataCompareExactLength.checked = false;
   if (dataCompareInsertion) dataCompareInsertion.checked = false;
   if (dataCompareExtraction) dataCompareExtraction.checked = false;
+  if (dataCompareStatus) dataCompareStatus.textContent = "";
   updateDataCompareTargetMode();
 }
 
