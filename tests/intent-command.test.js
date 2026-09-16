@@ -127,6 +127,11 @@ test("data comparison starts with all codes and optional conditions disabled", (
   assert.match(String(app.initializeDataCompareDefaults), /dataCompareExtraction\.checked = false/);
 });
 
+test("reopening data comparison preserves the current choices", () => {
+  const app = loadAppContext();
+  assert.doesNotMatch(String(app.setDataCompareExpanded), /initializeDataCompareDefaults/);
+});
+
 test("successful data comparison collapses the builder before showing its barcode", () => {
   const app = loadAppContext();
   assert.match(String(app.submitDataComparisonForm), /setDataCompareExpanded\(false\)/);
@@ -834,12 +839,14 @@ test("data comparison prototype generates insertion, control, replacement, and m
 
   const replaced = app.buildDataComparisonCommand({
     source: "A12A34",
-    expectedPattern: "{A->B}B12B34[ENTER]",
+    expectedPattern: "{A->B}12{A->B}34[ENTER]",
     targetCodeIds: ["99"],
     exactLength: true,
+    dataInsertion: true,
+    dataExtraction: true,
   });
   assert.equal(replaced.ok, true, replaced.error);
-  assert.equal(replaced.command, "DFMBK30099990006E4024142F20600F40D01.");
+  assert.equal(replaced.command, "DFMBK30099990006F501BA000142F20200F501BA000142F20200F40D01.");
 
   const multiple = app.buildDataComparisonCommand({
     source: "ABC",
@@ -934,6 +941,33 @@ test("data comparison prefers the longest contiguous source match for repeated d
     "データを6桁出力",
     "残り8桁は出力しない",
   ]);
+});
+
+test("data comparison replaces a character at its inline position", () => {
+  const app = loadAppContext({
+    enableDataFormatSettings: true,
+    dataFormatDefaultOn: true,
+  });
+  const result = app.buildDataComparisonCommand({
+    source: "ABCD1234",
+    expectedPattern: "AB{C->A}D[TAB*3]1234[ENTER]",
+    targetCodeIds: ["99"],
+    exactLength: false,
+    dataInsertion: true,
+    dataExtraction: true,
+  });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(
+    result.command,
+    "DFMBK30099999999F20200F501BA000141F20100F40903F20400F40D01."
+  );
+  assert.equal(result.simulated, "ABAD[TAB*3]1234[ENTER]");
+
+  const withInitialClear = app.applyDataFormatSettingsAppend(result.item);
+  assert.equal(
+    withInitialClear.command,
+    "DFMDF3;DFMBK30099999999F20200F501BA000141F20100F40903F20400F40D01."
+  );
 });
 
 test("data comparison extracts data through the end", () => {
