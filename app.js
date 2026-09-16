@@ -2716,8 +2716,8 @@ function findOutputAfterNthCharacter(query) {
     .trim();
   const tokenPattern = "スペース|space|空白|スラッシュ|slash|ピリオド|ドット|period|dot|ハイフン|hyphen|マイナス|minus|カンマ|comma|fnc1|fnc 1|gs|gsコード|gsキャラクタ|gsキャラクター|group separator|グループセパレータ|[!-~]";
   const patterns = [
-    new RegExp(`(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(${tokenPattern})\\s*(?:の)?\\s*(?:後ろ|後|以降|後方)\\s*(?:から|の)?\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
-    new RegExp(`(${tokenPattern})\\s*(?:の)?\\s*(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(?:後ろ|後|以降|後方)\\s*(?:から|の)?\\s*(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
+    new RegExp(`(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(${tokenPattern})\\s*(?:の)?\\s*(?:後ろ|後|以降|後方)\\s*(?:から|の)?\\s*(?:\\d{1,4}\\s*桁\\s*)?(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
+    new RegExp(`(${tokenPattern})\\s*(?:の)?\\s*(\\d{1,2})\\s*(?:個目|回目|つ目|番目)\\s*(?:の)?\\s*(?:後ろ|後|以降|後方)\\s*(?:から|の)?\\s*(?:\\d{1,4}\\s*桁\\s*)?(?:データ)?\\s*(?:を)?\\s*(?:出力|送信|表示)`, "i"),
   ];
 
   for (const pattern of patterns) {
@@ -2737,12 +2737,19 @@ function buildOutputAfterNthCharacterCommand(query) {
   const target = findOutputAfterNthCharacter(query);
   if (!target) return null;
 
+  const outputLengthMatch = normalizedQuery.match(/(?:後ろ|後|以降|後方)\s*(?:から|の)?\s*(\d{1,4})\s*桁\s*(?:データ)?\s*(?:を)?\s*(?:出力|送信|表示)/);
+  const outputLength = outputLengthMatch ? Number(outputLengthMatch[1]) : 0;
+  if (outputLengthMatch && (!Number.isInteger(outputLength) || outputLength < 1 || outputLength > 9999)) return null;
+
   const symbologyTargets = getSymbologyTargets(normalizedQuery);
   const readLengths = getReadLengths(normalizedQuery);
   const targetHex = target.char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
   const targetLabel = describeReplaceCharacter(target.char);
   const searchMove = `F8${targetHex}F501`;
-  const editorCommand = `${searchMove.repeat(target.count)}F100`;
+  const outputCommand = outputLength
+    ? splitSendCounts(outputLength).map((count) => `F2${String(count).padStart(2, "0")}00`).join("")
+    : "F100";
+  const editorCommand = `${searchMove.repeat(target.count)}${outputCommand}`;
   const codeLabel = symbologyTargets.length === 1 ? symbologyTargets[0].label : symbologyTargets.map((item) => item.label).join("と");
   const lengthLabel = readLengths.length > 0 ? `${readLengths.join("桁と")}桁読み取り時` : "全桁数";
   const lengthNote = readLengths.length > 0
@@ -2750,16 +2757,18 @@ function buildOutputAfterNthCharacterCommand(query) {
     : "9999 は全桁数を表す指定です。";
 
   return {
-    id: `df-generated-after-nth-${targetHex}-${target.count}-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
-    label: `${codeLabel}・${lengthLabel} ${target.count}個目の${targetLabel}後ろからデータ出力`,
+    id: `df-generated-after-nth-${targetHex}-${target.count}-${outputLength || "remainder"}-${symbologyTargets.map((item) => item.codeId).join("-")}-${readLengths.join("-") || "9999"}`,
+    label: `${codeLabel}・${lengthLabel} ${target.count}個目の${targetLabel}後ろから${outputLength ? `${outputLength}桁` : "データ"}出力`,
     category: "登録例",
-    summary: `${codeLabel}・${lengthLabel}を対象に、${target.count}個目の${targetLabel}の後ろから末尾までを出力します。`,
+    summary: `${codeLabel}・${lengthLabel}を対象に、${target.count}個目の${targetLabel}の後ろから${outputLength ? `${outputLength}桁を` : "末尾までを"}出力します。`,
     keywords: [],
     command: buildDataFormatCommandFromIntentConditions(query, editorCommand),
     notes: [
       `${symbologyTargets.map((item) => `${item.codeId} は${item.label}`).join("、")}を表す指定です。${lengthNote}`,
       `F8${targetHex} は次の ${targetLabel} の手前までカーソルを移動し、F501 はその1文字後ろへ移動する指定です。`,
-      `この組み合わせを${target.count}回繰り返し、F100 でそこから末尾まで送信します。`,
+      outputLength
+        ? `この組み合わせを${target.count}回繰り返し、${outputCommand} でそこから${outputLength}桁を送信します。`
+        : `この組み合わせを${target.count}回繰り返し、F100 でそこから末尾まで送信します。`,
     ],
   };
 }
