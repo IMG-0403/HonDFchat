@@ -7610,6 +7610,14 @@ function renderDataCompareSymbologies() {
   updateDataCompareTargetMode();
 }
 
+function initializeDataCompareDefaults() {
+  if (dataCompareTargetMode) dataCompareTargetMode.value = "all";
+  if (dataCompareExactLength) dataCompareExactLength.checked = false;
+  if (dataCompareInsertion) dataCompareInsertion.checked = false;
+  if (dataCompareExtraction) dataCompareExtraction.checked = false;
+  updateDataCompareTargetMode();
+}
+
 function updateDataCompareTargetMode() {
   if (!dataCompareSymbologies || !dataCompareTargetMode) return;
   const mode = dataCompareTargetMode.value;
@@ -7846,6 +7854,7 @@ if (appendSequenceToDataFormatInput) {
 renderQuickActions();
 renderCategories();
 renderDataCompareSymbologies();
+initializeDataCompareDefaults();
 renderSymbolSettingsBuilder();
 renderOutputSequenceBuilder();
 loadAdminCommandCatalog().finally(() => addMessage("bot", welcomeText));

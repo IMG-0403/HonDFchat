@@ -197,8 +197,8 @@
               <label>
                 対象コード
                 <select id="dataCompareTargetMode">
-                  <option value="all">全てのコード</option>
-                  <option value="single" selected>単体</option>
+                  <option value="all" selected>全てのコード</option>
+                  <option value="single">単体</option>
                   <option value="multiple">複数</option>
                 </select>
               </label>
@@ -207,13 +207,13 @@
                 <select id="dataCompareSymbologies" aria-describedby="dataCompareSymbologyHelp"></select>
               </label>
               <label class="data-compare-length-option">
-                <input id="dataCompareExactLength" type="checkbox" checked />
+                <input id="dataCompareExactLength" type="checkbox" />
                 <span>入力データの桁数を条件にする</span>
               </label>
             </div>
             <div class="data-compare-operations" role="group" aria-label="比較から作成する処理">
               <label class="data-compare-length-option">
-                <input id="dataCompareInsertion" type="checkbox" checked />
+                <input id="dataCompareInsertion" type="checkbox" />
                 <span>データ挿入</span>
               </label>
               <label class="data-compare-length-option">
@@ -267,6 +267,6 @@
     </template>
 
     <script src="config.js"></script>
-    <script src="app.js?v=20260916-04"></script>
+    <script src="app.js?v=20260916-05"></script>
   </body>
 </html>
