@@ -1270,6 +1270,8 @@ const dataCompareBody = dataCompareForm;
 const dataCompareTargetMode = document.querySelector("#dataCompareTargetMode");
 const dataCompareSymbologies = document.querySelector("#dataCompareSymbologies");
 const dataCompareExactLength = document.querySelector("#dataCompareExactLength");
+const dataCompareInsertion = document.querySelector("#dataCompareInsertion");
+const dataCompareExtraction = document.querySelector("#dataCompareExtraction");
 const dataCompareSource = document.querySelector("#dataCompareSource");
 const dataCompareExpected = document.querySelector("#dataCompareExpected");
 const dataCompareStatus = document.querySelector("#dataCompareStatus");
@@ -1598,35 +1600,113 @@ function appendComparisonOperation(operations, operation) {
     previous.text += operation.text;
     return;
   }
+  if (operation.type === "skip" && previous?.type === "skip") {
+    previous.count += operation.count;
+    return;
+  }
   operations.push(operation);
 }
 
-function buildComparisonOperations(transformedSource, expectedTokens) {
+function buildComparisonOperations(transformedSource, expectedTokens, { allowInsertion = true, allowExtraction = false } = {}) {
   const sourceCharacters = Array.from(transformedSource);
   const operations = [];
-  let sourceIndex = 0;
+  const sourceLength = sourceCharacters.length;
+  const expectedLength = expectedTokens.length;
 
-  for (const token of expectedTokens) {
-    if (token.type === "character" && token.value === sourceCharacters[sourceIndex]) {
+  if ((sourceLength + 1) * (expectedLength + 1) > 1000000) {
+    return { ok: false, error: "比較するデータが長すぎます。元データまたは希望結果を短くしてください。" };
+  }
+
+  const impossible = Number.POSITIVE_INFINITY;
+  const costs = Array.from({ length: sourceLength + 1 }, () => {
+    const row = new Float64Array(expectedLength + 1);
+    row.fill(impossible);
+    return row;
+  });
+  costs[sourceLength][expectedLength] = 0;
+
+  for (let sourceIndex = sourceLength; sourceIndex >= 0; sourceIndex -= 1) {
+    for (let expectedIndex = expectedLength; expectedIndex >= 0; expectedIndex -= 1) {
+      if (sourceIndex === sourceLength && expectedIndex === expectedLength) continue;
+      if (expectedIndex === expectedLength) {
+        costs[sourceIndex][expectedIndex] = allowExtraction ? 0 : impossible;
+        continue;
+      }
+
+      const token = expectedTokens[expectedIndex];
+      let best = impossible;
+      if (sourceIndex < sourceLength && token.type === "character" && token.value === sourceCharacters[sourceIndex]) {
+        best = costs[sourceIndex + 1][expectedIndex + 1];
+      }
+      if (allowExtraction && sourceIndex < sourceLength) {
+        best = Math.min(best, 1 + costs[sourceIndex + 1][expectedIndex]);
+      }
+      if (allowInsertion) {
+        best = Math.min(best, 1 + costs[sourceIndex][expectedIndex + 1]);
+      }
+      costs[sourceIndex][expectedIndex] = best;
+    }
+  }
+
+  if (!Number.isFinite(costs[0][0])) {
+    if (!allowInsertion && !allowExtraction) {
+      return { ok: false, error: "元データと希望結果が一致しません。データ挿入またはデータ抽出にチェックしてください。" };
+    }
+    if (!allowExtraction) {
+      return { ok: false, error: "希望出力に元データの一部がありません。データ抽出にチェックしてください。" };
+    }
+    return { ok: false, error: "希望出力に元データにない文字があります。データ挿入にチェックしてください。" };
+  }
+
+  let sourceIndex = 0;
+  let expectedIndex = 0;
+  while (expectedIndex < expectedLength) {
+    const token = expectedTokens[expectedIndex];
+    if (
+      sourceIndex < sourceLength
+      && token.type === "character"
+      && token.value === sourceCharacters[sourceIndex]
+      && costs[sourceIndex][expectedIndex] === costs[sourceIndex + 1][expectedIndex + 1]
+    ) {
       appendComparisonOperation(operations, { type: "send", count: 1 });
+      sourceIndex += 1;
+      expectedIndex += 1;
+      continue;
+    }
+
+    if (
+      allowExtraction
+      && sourceIndex < sourceLength
+      && costs[sourceIndex][expectedIndex] === 1 + costs[sourceIndex + 1][expectedIndex]
+    ) {
+      appendComparisonOperation(operations, { type: "skip", count: 1 });
       sourceIndex += 1;
       continue;
     }
-    if (token.type === "character") {
+
+    if (allowInsertion && costs[sourceIndex][expectedIndex] === 1 + costs[sourceIndex][expectedIndex + 1]) {
+      if (token.type === "character") {
       if (token.value.charCodeAt(0) > 0xFF) {
         return { ok: false, error: `挿入文字「${token.value}」は試験版では使用できません。` };
       }
       appendComparisonOperation(operations, { type: "insertText", text: token.value });
+      } else {
+        operations.push({ type: "insertControl", token });
+      }
+      expectedIndex += 1;
       continue;
     }
-    operations.push({ type: "insertControl", token });
+
+    return { ok: false, error: "元データと希望結果の差分を処理できませんでした。" };
   }
 
-  if (sourceIndex !== sourceCharacters.length) {
+  if (sourceIndex < sourceLength && allowExtraction) {
+    operations.push({ type: "omitRemainder", count: sourceLength - sourceIndex });
+  } else if (sourceIndex !== sourceLength) {
     const remaining = sourceCharacters.slice(sourceIndex).join("");
     return {
       ok: false,
-      error: `希望出力から元データの一部（${remaining.slice(0, 12)}${remaining.length > 12 ? "…" : ""}）が見つかりません。試験版は挿入と {A->B} 置換に対応しています。`,
+      error: `希望出力から元データの一部（${remaining.slice(0, 12)}${remaining.length > 12 ? "…" : ""}）が見つかりません。データ抽出にチェックしてください。`,
     };
   }
   return { ok: true, operations };
@@ -1658,6 +1738,11 @@ function buildComparisonEditorCommand(replacements, operations) {
       parts.push(`BA${String(characters.length).padStart(4, "0")}${charsToHex(characters)}`);
       return;
     }
+    if (operation.type === "skip") {
+      parts.push(buildCursorMoveCommand(operation.count));
+      return;
+    }
+    if (operation.type === "omitRemainder") return;
 
     const { token } = operation;
     if (token.type === "keystroke") {
@@ -1681,6 +1766,8 @@ function simulateComparisonOperations(transformedSource, operations) {
     if (operation.type === "send") {
       output.push(sourceCharacters.slice(sourceIndex, sourceIndex + operation.count).join(""));
       sourceIndex += operation.count;
+    } else if (operation.type === "skip" || operation.type === "omitRemainder") {
+      sourceIndex += operation.count;
     } else if (operation.type === "insertText") {
       output.push(operation.text);
     } else {
@@ -1696,6 +1783,8 @@ function describeComparisonOperations(replacements, operations) {
   );
   operations.forEach((operation) => {
     if (operation.type === "send") descriptions.push(`データを${operation.count}桁出力`);
+    if (operation.type === "skip") descriptions.push(`元データを${operation.count}桁読み飛ばし`);
+    if (operation.type === "omitRemainder") descriptions.push(`残り${operation.count}桁は出力しない`);
     if (operation.type === "insertText") descriptions.push(`「${operation.text}」を挿入`);
     if (operation.type === "insertControl") {
       descriptions.push(`${operation.token.label}${operation.token.count > 1 ? `を${operation.token.count}回` : ""}付加`);
@@ -1704,7 +1793,14 @@ function describeComparisonOperations(replacements, operations) {
   return descriptions;
 }
 
-function buildDataComparisonCommand({ source, expectedPattern, targetCodeIds = ["99"], exactLength = true }) {
+function buildDataComparisonCommand({
+  source,
+  expectedPattern,
+  targetCodeIds = ["99"],
+  exactLength = true,
+  dataInsertion = true,
+  dataExtraction = false,
+}) {
   const sourceText = String(source ?? "");
   if (!sourceText) return { ok: false, error: "バーコードデータを入力してください。" };
   const sourceLength = Array.from(sourceText).length;
@@ -1714,7 +1810,10 @@ function buildDataComparisonCommand({ source, expectedPattern, targetCodeIds = [
   const parsed = parseDataComparisonPattern(expectedPattern);
   if (!parsed.ok) return parsed;
   const transformedSource = applyComparisonReplacements(sourceText, parsed.replacements);
-  const operationResult = buildComparisonOperations(transformedSource, parsed.tokens);
+  const operationResult = buildComparisonOperations(transformedSource, parsed.tokens, {
+    allowInsertion: dataInsertion,
+    allowExtraction: dataExtraction,
+  });
   if (!operationResult.ok) return operationResult;
 
   const expectedDisplay = parsed.tokens.map(comparisonTokenToDisplay).join("");
@@ -7511,6 +7610,8 @@ function submitDataComparisonForm() {
     expectedPattern: dataCompareExpected?.value || "",
     targetCodeIds: getDataCompareSelectedCodeIds(),
     exactLength: dataCompareExactLength?.checked !== false,
+    dataInsertion: dataCompareInsertion?.checked === true,
+    dataExtraction: dataCompareExtraction?.checked === true,
   });
   if (!result.ok) {
     if (dataCompareStatus) dataCompareStatus.textContent = result.error;
@@ -7522,7 +7623,11 @@ function submitDataComparisonForm() {
     .map((codeId) => symbologyCodeTable.find((item) => item.codeId === codeId)?.label)
     .filter(Boolean)
     .join("、");
-  addMessage("user", `試験版：データ比較から作成\n対象: ${targetLabels}\nバーコードデータ: ${dataCompareSource.value}\n希望出力: ${dataCompareExpected.value}`);
+  const selectedOperations = [
+    dataCompareInsertion?.checked ? "データ挿入" : "",
+    dataCompareExtraction?.checked ? "データ抽出" : "",
+  ].filter(Boolean).join("・") || "差分なし";
+  addMessage("user", `試験版：データ比較から作成\n対象: ${targetLabels}\n処理: ${selectedOperations}\nバーコードデータ: ${dataCompareSource.value}\n希望出力: ${dataCompareExpected.value}`);
   addMessage("bot", `${dataComparisonResultToHtml(result)}${commandToHtml(result.item)}`, { html: true });
 }
 

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>HON DATA FORMAT</title>
-    <link rel="stylesheet" href="styles.css?v=20260903-01" />
+    <link rel="stylesheet" href="styles.css?v=20260916-02" />
   </head>
   <body>
     <main class="app-shell">
@@ -211,6 +211,16 @@
                 <span>入力データの桁数を条件にする</span>
               </label>
             </div>
+            <div class="data-compare-operations" role="group" aria-label="比較から作成する処理">
+              <label class="data-compare-length-option">
+                <input id="dataCompareInsertion" type="checkbox" checked />
+                <span>データ挿入</span>
+              </label>
+              <label class="data-compare-length-option">
+                <input id="dataCompareExtraction" type="checkbox" />
+                <span>データ抽出</span>
+              </label>
+            </div>
             <p class="data-compare-help" id="dataCompareSymbologyHelp">複数選択では Ctrl キーを押しながらコード種を選択してください。</p>
             <div class="data-compare-fields">
               <label>
@@ -222,7 +232,7 @@
                 <textarea id="dataCompareExpected" rows="3" spellcheck="false" placeholder="例: (01)12345678901234(17)250101(10)ABC[ENTER]"></textarea>
               </label>
             </div>
-            <p class="data-compare-help"><code>[ENTER]</code>、<code>[TAB*2]</code> で制御文字を付加し、<code>{A-&gt;B}</code> で文字を置換します。通常の <code>[</code> や <code>{</code> は直前に <code>\</code> を付けます。</p>
+            <p class="data-compare-help">「データ挿入」は希望結果で増えた文字を該当桁へ挿入し、「データ抽出」は希望結果と一致する箇所だけをその桁数で出力します。両方の併用も可能です。<code>[ENTER]</code>、<code>[TAB*2]</code> で制御文字を付加し、<code>{A-&gt;B}</code> で文字を置換します。</p>
             <div class="data-compare-actions">
               <span class="data-compare-status" id="dataCompareStatus" role="status" aria-live="polite"></span>
               <button type="submit" id="generateDataCompareCommand">設定作成</button>
@@ -257,6 +267,6 @@
     </template>
 
     <script src="config.js"></script>
-    <script src="app.js?v=20260916-01"></script>
+    <script src="app.js?v=20260916-02"></script>
   </body>
 </html>
